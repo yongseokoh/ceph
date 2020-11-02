@@ -12373,6 +12373,7 @@ size_t Client::_vxattrcb_mirror_info(Inode *in, char *val, size_t size)
   flags: 0,                                                     \
 }
 
+#if 0
 #define XATTR_DMCLOCK_FIELD(_type, _name)		                \
 {								\
   name: CEPH_XATTR_NAME(_type, _name),			        \
@@ -12382,6 +12383,16 @@ size_t Client::_vxattrcb_mirror_info(Inode *in, char *val, size_t size)
   exists_cb: &Client::_vxattrcb_dmclock_exists,			\
   flags: 0,                                                     \
 }
+#else
+#define XATTR_DMCLOCK_FIELD(_type, _name)		                \
+{								\
+  name: CEPH_XATTR_NAME(_type, _name),			        \
+  getxattr_cb: &Client::_vxattrcb_ ## _type ## _ ## _name,	\
+  readonly: false,						\
+  exists_cb: &Client::_vxattrcb_dmclock_exists,			\
+  flags: 0,                                                     \
+}
+#endif
 
 const Client::VXattr Client::_dir_vxattrs[] = {
   {
@@ -12435,17 +12446,21 @@ const Client::VXattr Client::_dir_vxattrs[] = {
     exists_cb: &Client::_vxattrcb_mirror_info_exists,
     flags: 0,
   },
+#if 1
   {
     name: "ceph.dmclock",
     getxattr_cb: &Client::_vxattrcb_dmclock,
     readonly: false,
+#if 0
     hidden: false,
+#endif
     exists_cb: &Client::_vxattrcb_dmclock_exists,
     flags: 0,
   },
   XATTR_DMCLOCK_FIELD(dmclock, mds_reservation),
   XATTR_DMCLOCK_FIELD(dmclock, mds_weight),
   XATTR_DMCLOCK_FIELD(dmclock, mds_limit),
+#endif
   { name: "" }     /* Required table terminator */
 };
 
