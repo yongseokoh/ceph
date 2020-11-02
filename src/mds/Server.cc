@@ -4759,7 +4759,7 @@ public:
   C_MDS_inode_update_finish(Server *s, MDRequestRef& r, CInode *i,
 			    bool sm=false, bool cr=false, bool nr=false, bool ud=false) :
     ServerLogContext(s, r), in(i),
-    truncating_smaller(sm), changed_ranges(cr), new_realm(nr), update_dmclock(ud) { }
+    truncating_smaller(sm), changed_ranges(cr), adjust_realm(nr), update_dmclock(ud) { }
   void finish(int r) override {
     ceph_assert(r == 0);
 
@@ -5795,7 +5795,11 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
     }
 
     size_t pos = name.find("mds_");
+#if 0
     auto &pi = cur->project_inode();
+#else
+    auto pi = cur->project_inode(mdr);
+#endif
 
     if (pos != std::string::npos) {
 
@@ -5811,19 +5815,19 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
       }
 
       if (type == "reservation") {
-	pi.inode.dmclock_info.mds_reservation = value_;
+	pi.inode->dmclock_info.mds_reservation = value_;
 	reservation = value_;
-	weight = pi.inode.dmclock_info.mds_weight;
-	limit = pi.inode.dmclock_info.mds_limit;
+	weight = pi.inode->dmclock_info.mds_weight;
+	limit = pi.inode->dmclock_info.mds_limit;
       } else if (type == "weight") {
-	pi.inode.dmclock_info.mds_weight = value_;
-	reservation = pi.inode.dmclock_info.mds_reservation;
+	pi.inode->dmclock_info.mds_weight = value_;
+	reservation = pi.inode->dmclock_info.mds_reservation;
 	weight = value_;
-	limit = pi.inode.dmclock_info.mds_limit;
+	limit = pi.inode->dmclock_info.mds_limit;
       } else if (type == "limit") {
-	pi.inode.dmclock_info.mds_limit = value_;
-	reservation = pi.inode.dmclock_info.mds_reservation;
-	weight = pi.inode.dmclock_info.mds_weight;
+	pi.inode->dmclock_info.mds_limit = value_;
+	reservation = pi.inode->dmclock_info.mds_reservation;
+	weight = pi.inode->dmclock_info.mds_weight;
 	limit = value_;
       } else {
 	respond_to_request(mdr, -EINVAL);
@@ -5924,7 +5928,7 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur)
       return;
     }
     
-    auto &pi = cur->project_inode();
+    auto pi = cur->project_inode(mdr);
     string path;
     cur->make_path_string(path, true);
 
@@ -5934,13 +5938,13 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur)
       const string type = name.substr(pos + 4);
 
       if (type == "reservation") {
-	pi.inode.dmclock_info.mds_reservation = 0;
+	pi.inode->dmclock_info.mds_reservation = 0;
       } else if (type == "weight") {
-	pi.inode.dmclock_info.mds_weight = 0;
+	pi.inode->dmclock_info.mds_weight = 0;
       } else if (type == "limit") {
-	pi.inode.dmclock_info.mds_limit = 0;
+	pi.inode->dmclock_info.mds_limit = 0;
       }
-      pi.inode.version = cur->pre_dirty();
+      pi.inode->version = cur->pre_dirty();
 
       mds->mds_dmclock_scheduler->set_default_volume_info(path);
       mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path);

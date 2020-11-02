@@ -390,7 +390,7 @@ class MDSRank {
     SnapServer *snapserver = nullptr;
     SnapClient *snapclient = nullptr;
 
-    SessionMap sessionmap
+    SessionMap sessionmap;
 
     MDSDmclockScheduler *mds_dmclock_scheduler = nullptr;
 
