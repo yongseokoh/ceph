@@ -184,6 +184,7 @@ struct Inode {
   unsigned flags;
 
   quota_info_t quota;
+  dmclock_info_t dmclock_info;
 
   bool is_complete_and_ordered() {
     static const unsigned wants = I_COMPLETE | I_DIR_ORDERED;

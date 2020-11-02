@@ -10815,6 +10815,9 @@ void MDCache::decode_replica_inode(CInode *&in, bufferlist::const_iterator& p, C
     in->_decode_locks_state_for_replica(p, false);
     dout(10) << __func__ << " had " << *in << dendl;
   }
+  dout(20) << "add_replica_inode reservation: " << in->inode.dmclock_info.mds_reservation
+    << " weight: " << in->inode.dmclock_info.mds_weight 
+    << " limit: " << in->inode.dmclock_info.mds_limit << dendl;
 
   if (dn) {
     if (!dn->get_linkage()->is_primary() || dn->get_linkage()->get_inode() != in)
@@ -10832,6 +10835,25 @@ void MDCache::decode_replica_inode(CInode *&in, bufferlist::const_iterator& p, C
   }
 
   DECODE_FINISH(p); 
+  
+  #if 0 // Jinmyeong: need to check 
+  auto dmclock_info = in->inode.dmclock_info;
+  bool qos_valid = (dmclock_info.mds_reservation > 0.0 &&
+		    dmclock_info.mds_weight > 0.0 &&
+		    dmclock_info.mds_limit > 0.0);
+
+  if (qos_valid) {
+    string path;
+    if (in->is_root()) {
+      path = "/";
+    } else {
+      in->make_path_string(path, true);
+    }
+    mds->mds_dmclock_scheduler->update_volume_info(path, dmclock_info.mds_reservation, dmclock_info.mds_weight, dmclock_info.mds_limit, false);
+  }
+
+  return in;
+  #endif
 }
 
  

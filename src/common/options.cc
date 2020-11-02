@@ -8508,6 +8508,31 @@ std::vector<Option> get_mds_options() {
      .set_flag(Option::FLAG_RUNTIME)
      .set_description("interval in seconds for metrics data update.")
      .set_long_description("interval in seconds after which active MDSs send client metrics data to rank 0.")
+    Option("mds_task_status_update_interval", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(2.0)
+     .set_description("task status update interval to manager")
+     .set_long_description("interval (in seconds) for sending mds task status to ceph manager"),
+
+    Option("mds_dmclock_mds_qos_enable", Option::TYPE_BOOL, Option::LEVEL_DEV)
+     .set_default(false)
+     .set_description("")
+     .set_long_description(""),
+
+    Option("mds_dmclock_mds_qos_default_reservation", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(10000)
+     .set_description("")
+     .set_long_description(""),
+
+    Option("mds_dmclock_mds_qos_default_weight", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(10000)
+     .set_description("")
+     .set_long_description(""),
+
+    Option("mds_dmclock_mds_qos_default_limit", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(10000)
+     .set_description("")
+     .set_long_description(""),
+
   });
 }
 

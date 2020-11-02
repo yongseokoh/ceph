@@ -48,6 +48,7 @@
 #include "messages/MMDSResolveAck.h"
 #include "messages/MMDSPeerRequest.h"
 #include "messages/MMDSSnapUpdate.h"
+#include "messages/MDSDmclockQoS.h"
 
 #include "osdc/Filer.h"
 #include "CInode.h"

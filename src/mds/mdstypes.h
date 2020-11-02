@@ -307,6 +307,38 @@ inline bool operator<(const vinodeno_t &l, const vinodeno_t &r) {
     (l.ino == r.ino && l.snapid < r.snapid);
 }
 
+struct dmclock_info_t
+{
+  double mds_reservation = 0;
+  double mds_limit = 0;
+  double mds_weight = 0;
+
+  dmclock_info_t() {}
+
+  void encode(bufferlist& bl) const {
+    ENCODE_START(1, 1, bl);
+    encode(mds_reservation, bl);
+    encode(mds_limit, bl);
+    encode(mds_weight, bl);
+    ENCODE_FINISH(bl);
+  }
+
+  void decode(bufferlist::const_iterator& p) {
+    DECODE_START_LEGACY_COMPAT_LEN(1, 1, 1, p);
+    decode(mds_reservation, p);
+    decode(mds_limit, p);
+    decode(mds_weight, p);
+    DECODE_FINISH(p);
+  }
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<dmclock_info_t *>& ls);
+};
+WRITE_CLASS_ENCODER(dmclock_info_t)
+
+inline bool operator==(const dmclock_info_t &l, const dmclock_info_t &r) {
+  return memcmp(&l, &r, sizeof(l)) == 0;
+}
+
 struct quota_info_t
 {
   void encode(ceph::buffer::list& bl) const {
@@ -676,6 +708,7 @@ void inode_t<Allocator>::encode(ceph::buffer::list &bl, uint64_t features) const
   encode(max_size_ever, bl);
   encode(inline_data, bl);
   encode(quota, bl);
+  encode(dmclock_info, bl);
 
   encode(stray_prior_path, bl);
 
@@ -761,6 +794,8 @@ void inode_t<Allocator>::decode(ceph::buffer::list::const_iterator &p)
     backtrace_version = 0; // force update backtrace
   if (struct_v >= 11)
     decode(quota, p);
+  if (struct_v >= 16)
+    decode(dmclock_info, p);
 
   if (struct_v >= 12) {
     std::string tmp;
@@ -853,6 +888,10 @@ void inode_t<Allocator>::dump(ceph::Formatter *f) const
 
   f->open_object_section("accounted_rstat");
   accounted_rstat.dump(f);
+  f->close_section();
+  
+  f->open_object_section("dmclock_info");
+  dmclock_info.dump(f);
   f->close_section();
 
   f->dump_unsigned("version", version);
@@ -972,7 +1011,8 @@ int inode_t<Allocator>::compare(const inode_t<Allocator> &other, bool *divergent
         !(accounted_rstat == other.accounted_rstat) ||
         file_data_version != other.file_data_version ||
         xattr_version != other.xattr_version ||
-        backtrace_version != other.backtrace_version) {
+        backtrace_version != other.backtrace_version ||
+	!(dmclock_info == other.dmclock_info)) {
       *divergent = true;
     }
     return 0;
