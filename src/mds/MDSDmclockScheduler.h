@@ -34,7 +34,11 @@
 #include "dmclock/src/dmclock_server.h"
 #include "CInode.h"
 
+#if 0
 using MDSReqRef = MClientRequest::const_ref;
+#else
+using MDSReqRef = cref_t<MClientRequest>;
+#endif
 using crimson::dmclock::ClientInfo;
 using crimson::dmclock::AtLimit;
 using crimson::dmclock::PhaseType;
@@ -89,25 +93,25 @@ public:
 
 class QoSInfo : public ClientInfo {
 public:
-  explicit QoSInfo(double reservation, double weight, double limit) :
+  explicit QoSInfo(const double reservation, const double weight, const double limit) :
     ClientInfo(reservation, weight, limit) {};
 
-  void set_reservation(double reservation)
+  void set_reservation(const double _reservation)
   {
-    reservation = reservation;
-    reservation_inv = 1.0 / reservation;
+    reservation = _reservation;
+    reservation_inv = 1.0 / _reservation;
   }
 
-  void set_weight(double weight)
+  void set_weight(const double _weight)
   {
-    weight = weight;
-    weight_inv = 1.0 / weight;
+    weight = _weight;
+    weight_inv = 1.0 / _weight;
   }
 
-  void set_limit(double limit)
+  void set_limit(const double _limit)
   {
-    limit = limit;
-    limit_inv = 1.0 / limit;
+    limit = _limit;
+    limit_inv = 1.0 / _limit;
   }
 
   double get_reservation() const
@@ -137,7 +141,7 @@ private:
   bool use_default;
 
 public:
-  explicit VolumeInfo(double reservation, double weight, double limit, bool _use_default): 
+  explicit VolumeInfo(const double reservation, const double weight, const double limit, const bool _use_default): 
     QoSInfo(reservation, weight, limit), session_cnt(1), use_default(_use_default) {};
 
   void inc_ref_cnt() { session_cnt++; };
@@ -153,7 +157,7 @@ public:
     use_default = _use_default;
   }
 
-  void update_volume_info(double reservation, double weight, double limit, bool use_default)
+  void update_volume_info(const double reservation, const double weight, const double limit, const bool use_default)
   {
     set_reservation(reservation);
     set_weight(weight);
@@ -181,7 +185,7 @@ public:
     return enabled;
   }
 
-  void set_status(bool _enabled)
+  void set_status(const bool _enabled)
   {
     enabled = _enabled;
   }
@@ -211,8 +215,8 @@ public:
   }
 
   /* volume QoS info management */
-  void create_volume_info(const VolumeId &id, double reservation, double weight, double limit, bool use_default);
-  void update_volume_info(const VolumeId &id, double reservation, double weight, double limit, bool use_default);
+  void create_volume_info(const VolumeId &id, const double reservation, const double weight, const double limit, const bool use_default);
+  void update_volume_info(const VolumeId &id, const double reservation, const double weight, const double limit, const bool use_default);
   VolumeInfo *get_volume_info(const VolumeId &id);
   void delete_volume_info(const VolumeId &id);
   void set_default_volume_info(const VolumeId &id);
@@ -223,8 +227,13 @@ public:
 
   /* multi MDS broadcast message */
   void broadcast_qos_info_update_to_mds(const VolumeId& id);
+#if 0
   void handle_qos_info_update_message(const MDSDmclockQoS::const_ref &m);
   void proc_message(const Message::const_ref &m);
+#else
+  void handle_qos_info_update_message(const cref_t<MDSDmclockQoS> &m);
+  void proc_message(const cref_t<Message> &m);
+#endif
 
   void handle_mds_request(const MDSReqRef &req);
   void submit_request_to_mds(const VolumeId &, std::unique_ptr<ClientRequest> &&, const PhaseType&, const uint64_t);

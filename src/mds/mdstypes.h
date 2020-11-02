@@ -639,6 +639,7 @@ struct inode_t {
   nest_info_t accounted_rstat; // protected by parent's nestlock
 
   quota_info_t quota;
+  dmclock_info_t dmclock_info;
 
   mds_rank_t export_pin = MDS_RANK_NONE;
 
