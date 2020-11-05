@@ -61,10 +61,9 @@
 #include <functional>
 
 #include "common/config.h"
+
 #include "MDSDmclockScheduler.h"
-
 #include "dmclock/src/dmclock_recs.h"
-
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mds
@@ -5795,11 +5794,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
     }
 
     size_t pos = name.find("mds_");
-#if 0
-    auto &pi = cur->project_inode();
-#else
     auto pi = cur->project_inode(mdr);
-#endif
 
     if (pos != std::string::npos) {
 
