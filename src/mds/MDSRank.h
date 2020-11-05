@@ -185,7 +185,6 @@ class MDSRank {
 
     bool is_daemon_stopping() const;
 
-
     MDSTableClient *get_table_client(int t);
     MDSTableServer *get_table_server(int t);
 

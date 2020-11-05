@@ -510,13 +510,13 @@ OPTION(mds_damage_table_max_entries, OPT_INT)
 // Maximum increment for client writable range, counted by number of objects
 OPTION(mds_client_writeable_range_max_inc_objs, OPT_U32)
 
-//
+// MDS dmclock qos scheduler enable bool
 OPTION(mds_dmclock_mds_qos_enable, OPT_BOOL)
-//
+// MDS dmclock qos scheduler default reservation parameter
 OPTION(mds_dmclock_mds_qos_default_reservation, OPT_FLOAT)
-//
+// MDS dmclock qos scheduler default weight parameter
 OPTION(mds_dmclock_mds_qos_default_weight, OPT_FLOAT)
-//
+// MDS dmclock qos scheduler default limit parameter
 OPTION(mds_dmclock_mds_qos_default_limit, OPT_FLOAT)
 
 // verify backend can support configured max object name length

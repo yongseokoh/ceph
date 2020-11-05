@@ -34,11 +34,7 @@
 #include "dmclock/src/dmclock_server.h"
 #include "CInode.h"
 
-#if 0
-using MDSReqRef = MClientRequest::const_ref;
-#else
 using MDSReqRef = cref_t<MClientRequest>;
-#endif
 using crimson::dmclock::ClientInfo;
 using crimson::dmclock::AtLimit;
 using crimson::dmclock::PhaseType;
@@ -227,13 +223,8 @@ public:
 
   /* multi MDS broadcast message */
   void broadcast_qos_info_update_to_mds(const VolumeId& id);
-#if 0
-  void handle_qos_info_update_message(const MDSDmclockQoS::const_ref &m);
-  void proc_message(const Message::const_ref &m);
-#else
   void handle_qos_info_update_message(const cref_t<MDSDmclockQoS> &m);
   void proc_message(const cref_t<Message> &m);
-#endif
 
   void handle_mds_request(const MDSReqRef &req);
   void submit_request_to_mds(const VolumeId &, std::unique_ptr<ClientRequest> &&, const PhaseType&, const uint64_t);

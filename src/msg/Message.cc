@@ -859,11 +859,7 @@ Message *decode_message(CephContext *cct,
     break;
 
   case MSG_MDS_DMCLOCK_QOS:
-#if 0
-    m = MDSDmclockQoS::create();
-#else
     m = make_message<MDSDmclockQoS>();
-#endif
     break;
 
   case MSG_MGR_BEACON:
