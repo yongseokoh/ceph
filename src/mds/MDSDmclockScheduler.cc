@@ -30,11 +30,7 @@ const VolumeId &MDSDmclockScheduler::get_volume_id(Session *session)
   return client_root_entry->second;
 }
 
-#if 0
-void MDSDmclockScheduler::handle_mds_request(const MDSReqRef &mds_req)
-#else
 void MDSDmclockScheduler::handle_mds_request(const cref_t<MClientRequest> &mds_req)
-#endif
 {
   ceph_assert(mds->mds_lock.is_locked_by_me());
 
@@ -297,11 +293,7 @@ void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& id)
     dout(0) << "send message to MDS " << it << dendl;
 
     int r = 1;
-#if 0
-    auto qos_msg = MDSDmclockQoS::create(id);
-#else
     auto qos_msg = make_message<MDSDmclockQoS>(id);
-#endif
     /* root path  */
     if (mds->get_nodeid() == 0)
     {
@@ -331,11 +323,7 @@ void MDSDmclockScheduler::proc_message(const cref_t<Message> &m)
 {
   switch (m->get_type()) {
     case MSG_MDS_DMCLOCK_QOS:
-#if 0
-      handle_qos_info_update_message(MDSDmclockQoS::msgref_cast(m));
-#else
       handle_qos_info_update_message(ref_cast<MDSDmclockQoS>(m));
-#endif
       break;
   default:
     derr << " dmClock QoS unknown message " << m->get_type() << dendl_impl;
@@ -375,11 +363,7 @@ void MDSDmclockScheduler::process_request()
     std::unique_lock<std::mutex> lock(queue_mutex);
 
     while (state == SchedulerState::RUNNING) {
-#if 1
       queue_cvar.wait(lock);
-#else
-      queue_cvar.wait_for(lock, 5 * 1s); 
-#endif
 
       while (request_queue.size()) {
         std::unique_ptr<Request> request = std::move(request_queue.front());
@@ -393,17 +377,11 @@ void MDSDmclockScheduler::process_request()
             std::unique_ptr<ClientRequest> c_request(static_cast<ClientRequest *>(request.release()));
             dout(0) << "Pop client request (size " << request_queue.size() << " volume_id "
                 << c_request->get_volume_id() << " time " << c_request->time << " cost " << c_request->cost << dendl;
-#if 1
+
             auto r = dmclock_queue->add_request(std::move(c_request), std::move(c_request->get_volume_id()),
                 {0, 0}, c_request->time, c_request->cost);
-#else
-            auto r = dmclock_queue->add_request(std::move(c_request), c_request->get_volume_id(),
-                {0, 0}, c_request->cost);
-#endif
+
             dout(0) << "add request r value = " << r << dendl;
-            dout(0) << "sched_ahead_when = " << setprecision(14) << dmclock_queue->get_sched_ahead_time() << dendl;
-            dout(0) << "curtime = "  << setprecision(14) << crimson::dmclock::get_time() << dendl;
-            dout(0) << "queue count = " << dmclock_queue->request_count() << dendl;
             break;
           }
           case RequestType::UPDATE_REQUEST:
@@ -419,46 +397,7 @@ void MDSDmclockScheduler::process_request()
         lock.lock();
       }
 
-#if 0 
-      dout(0) << "sched_ahead_when = " << std::setprecision(14) << dmclock_queue->get_sched_ahead_time() << dendl;
-      dout(0) << "curtime = "  << std::setprecision(14) << crimson::dmclock::get_time() << dendl;
-      dout(0) << "queue count = " << dmclock_queue->request_count() << dendl;
-#endif
-      dout(0) << " sched_at_count " << dmclock_queue->get_sched_at_count() << " get_submit_count " 
-        << dmclock_queue->get_submit_count()
-        << " wakeup count " << dmclock_queue->get_wakeup_count()
-        << " wakeup2 count " << dmclock_queue->get_wakeup2_count()
-        << dendl;
-
-      //std::chrono::system_clock::time_point EndTime = std::chrono::system_clock::now();
-      //dout(0) << "curtime = " << std::chrono::system_clock::now() << dendl;
-
-       //dout(0) << std::chrono::system_clock::now() << dendl;
-      if (0) 
-      {
-        using namespace std::chrono;
-
-        duration<int,std::ratio<60*60*24> > one_day (1);
-
-        system_clock::time_point today = system_clock::now();
-
-        time_t tt;
-
-        tt = system_clock::to_time_t ( today );
-        dout(0) << "today is: " << ctime(&tt) << dendl;
-
-        struct timespec now;
-        auto result = clock_gettime(CLOCK_REALTIME, &now);
-        (void) result; // reference result in case assert is compiled out
-        assert(0 == result);
-        dout(0) << "sec " << now.tv_sec << " nsec " << now.tv_nsec << dendl;
-      }
-
-#if 0
-      if (need_request_completed == true || dmclock_queue->request_count()) {
-#else
       if (need_request_completed == true) {
-#endif
         need_request_completed = false;
         lock.unlock();
 
@@ -483,11 +422,7 @@ CInode *MDSDmclockScheduler::read_xattrs(const VolumeId id)
   CInode *in;
 
   filepath path_(id.c_str());
-#if 0
-  auto qos_msg = MDSDmclockQoS::create(id);
-#else
   auto qos_msg = make_message<MDSDmclockQoS>(id);
-#endif
   CF_MDS_RetryMessageFactory cf(mds, qos_msg);
 
   // Do not need to set qos at ROOT_VOLUME_ID
@@ -499,12 +434,9 @@ CInode *MDSDmclockScheduler::read_xattrs(const VolumeId id)
   }
 
   MDRequestRef null_ref;
-#if 0
-  mds->mdcache->path_traverse(null_ref, cf, path_, NULL, &in, MDS_TRAVERSE_DISCOVER);
-#else
+
   int flags = MDS_TRAVERSE_DISCOVER;
   mds->mdcache->path_traverse(null_ref, cf, path_, flags, NULL, &in);
-#endif
 
   auto pip = in->get_projected_inode();
 
