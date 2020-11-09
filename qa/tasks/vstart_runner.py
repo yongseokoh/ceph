@@ -584,7 +584,7 @@ def safe_kill(pid):
     os.kill annoyingly raises exception if process already dead.  Ignore it.
     """
     try:
-        return os.kill(pid, signal.SIGKILL)
+        return os.system("sudo pkill -9 -P " + str(pid))
     except OSError as e:
         if e.errno == errno.ESRCH:
             # Raced with process termination
@@ -793,6 +793,7 @@ class LocalFuseMount(FuseMount):
                     d = asok_conf.groups(1)[0]
                     break
         path = "{0}/client.{1}.*.asok".format(d, self.client_id)
+
         return path
 
     def mount(self, mntopts=[], createfs=True, check_status=True, **kwargs):
@@ -819,8 +820,8 @@ class LocalFuseMount(FuseMount):
 
         def list_connections():
             self.client_remote.run(
-                args=["mount", "-t", "fusectl", "/sys/fs/fuse/connections", "/sys/fs/fuse/connections"],
-                check_status=False
+                args=["sudo", "mount", "-t", "fusectl", "/sys/fs/fuse/connections", "/sys/fs/fuse/connections"],
+                check_status=False, omit_sudo=False
             )
 
             p = self.client_remote.run(args=["ls", "/sys/fs/fuse/connections"],
@@ -840,7 +841,7 @@ class LocalFuseMount(FuseMount):
         pre_mount_conns = list_connections()
         log.info("Pre-mount connections: {0}".format(pre_mount_conns))
 
-        cmdargs = []
+        cmdargs = ['sudo']
         if self.using_namespace:
             cmdargs = ['sudo', 'nsenter',
                        '--net=/var/run/netns/{0}'.format(self.netns_name),
@@ -867,7 +868,6 @@ class LocalFuseMount(FuseMount):
         log.info("Mounting client.{0} with pid "
                  "{1}".format(self.client_id, self.fuse_daemon.subproc.pid))
 
-        # Wait for the connection reference to appear in /sys
         waited = 0
         post_mount_conns = list_connections()
         while len(post_mount_conns) <= len(pre_mount_conns):

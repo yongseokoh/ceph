@@ -94,6 +94,7 @@ class FuseMount(CephFSMount):
             fuse_cmd += ["--client_fs=" + self.cephfs_name]
         if mntopts:
             fuse_cmd += mntopts
+
         fuse_cmd.append(self.hostfs_mntpt)
 
         cwd = self.test_dir
@@ -118,8 +119,8 @@ class FuseMount(CephFSMount):
             self.client_remote.run(args=['sudo', 'modprobe', 'fuse'],
                                    check_status=False)
             self.client_remote.run(
-                args=["sudo", "mount", "-t", "fusectl", conn_dir, conn_dir],
-                check_status=False, timeout=(30))
+                args=["sudo", "-s", "mount", "-t", "fusectl", conn_dir, conn_dir],
+                check_status=True, timeout=(30), omit_sudo=False)
 
             try:
                 ls_str = self.client_remote.sh("ls " + conn_dir,
@@ -461,7 +462,7 @@ print(_find_admin_socket("{client_name}"))
                     p = self.client_remote.run(args=
                         ['sudo', self._prefix + 'ceph', '--admin-daemon', asok_path] + args,
                         stdout=StringIO(), stderr=StringIO(), wait=False,
-                        timeout=(15*60))
+                        timeout=(15*60), omit_sudo=False)
                     p.wait()
                     break
                 except CommandFailedError:
