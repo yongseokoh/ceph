@@ -284,22 +284,17 @@ void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& id)
   mds->get_mds_map()->get_active_mds_set(actives);
 
   dout(0) << "broadcast_qos_info_update_to_mds()" << dendl;
+  dout(0) << "i am mds " << mds->get_nodeid() << dendl;
 
   for (auto it : actives) {
     dout(0) << "active MDS " << it << dendl;
     if (mds->get_nodeid() == it) {
       continue;
     }
-    dout(0) << "send message to MDS " << it << dendl;
-
-    int r = 1;
     auto qos_msg = make_message<MDSDmclockQoS>(id);
-    /* root path  */
-    if (mds->get_nodeid() == 0)
-    {
-      mds->send_message_mds(qos_msg, r);
-      dout(0) << "send_message to rank: " << r << dendl;
-    }
+
+    mds->send_message_mds(qos_msg, it);
+    dout(0) << "send message to MDS " << it << " id: " << id << dendl;
   }
 }
 

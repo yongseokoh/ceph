@@ -2107,6 +2107,7 @@ void CInode::encode_lock_ipolicy(bufferlist& bl)
     encode(get_inode()->ctime, bl);
     encode(get_inode()->layout, bl, mdcache->mds->mdsmap->get_up_features());
     encode(get_inode()->quota, bl);
+    encode(get_inode()->dmclock_info, bl);
     encode(get_inode()->export_pin, bl);
     encode(get_inode()->export_ephemeral_distributed_pin, bl);
     encode(get_inode()->export_ephemeral_random_pin, bl);
@@ -2127,6 +2128,7 @@ void CInode::decode_lock_ipolicy(bufferlist::const_iterator& p)
       _inode->ctime = tm;
     decode(_inode->layout, p);
     decode(_inode->quota, p);
+    decode(_inode->dmclock_info, p);
     decode(_inode->export_pin, p);
     if (struct_v >= 2) {
       decode(_inode->export_ephemeral_distributed_pin, p);

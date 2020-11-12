@@ -5926,7 +5926,6 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur)
       pi.inode->version = cur->pre_dirty();
 
       mds->mds_dmclock_scheduler->set_default_volume_info(path);
-      mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path);
 
     // log + wait
       mdr->ls = mdlog->get_current_segment();
