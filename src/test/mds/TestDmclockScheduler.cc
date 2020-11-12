@@ -76,6 +76,7 @@ TEST(MDSDmclockScheduler, GoodBasic)
   scheduler->enable_qos_feature();
   ASSERT_TRUE(scheduler->get_default_conf().is_enabled()==true);
 
+  SessionId sid = "10024";
   VolumeId vid = "/";
   VolumeInfo *vi;
   {
@@ -84,7 +85,7 @@ TEST(MDSDmclockScheduler, GoodBasic)
     double limit = 30.0;
     bool use_default = false;
 
-    scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+    scheduler->create_volume_info(vid, sid, reservation, weight, limit, use_default);
 
     vi = scheduler->get_volume_info(vid);
     ASSERT_TRUE(vi->get_reservation() == reservation);
@@ -135,13 +136,61 @@ TEST(MDSDmclockScheduler, GoodBasic)
   scheduler->set_default_volume_info(vid);
   ASSERT_TRUE(vi->is_use_default() == true);
 
-  scheduler->delete_volume_info(vid);
+  scheduler->delete_volume_info(vid, sid);
 
   scheduler->disable_qos_feature();
   ASSERT_TRUE(scheduler->get_default_conf().is_enabled()==false);
 
   delete scheduler;
 }
+
+TEST(MDSDmclockScheduler, VolumeSessionInfo)
+{
+  MDSDmclockScheduler *scheduler = new MDSDmclockScheduler(mds);
+  scheduler->enable_qos_feature();
+
+  SessionId sid = "10024";
+  VolumeId vid = "/";
+  VolumeInfo *vi;
+
+  double reservation = 10.0;
+  double weight = 20.0;
+  double limit = 30.0;
+  bool use_default = false;
+
+  scheduler->create_volume_info(vid, sid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, sid, reservation, weight, limit, use_default);
+
+  vi = scheduler->get_volume_info(vid);
+
+  ASSERT_TRUE(vi->get_session_cnt() == 1);
+
+  scheduler->delete_volume_info(vid, sid);
+  scheduler->delete_volume_info(vid, sid);
+
+  ASSERT_TRUE(vi->get_session_cnt() == 0);
+
+  scheduler->create_volume_info(vid, "1020", reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, "1020", reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, "1020", reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, "3021", reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, "3021", reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, "9028", reservation, weight, limit, use_default);
+
+  ASSERT_TRUE(vi->get_session_cnt() == 3);
+
+  scheduler->delete_volume_info(vid, "9028");
+  scheduler->delete_volume_info(vid, "1020");
+
+  ASSERT_TRUE(vi->get_session_cnt() == 1);
+
+  scheduler->delete_volume_info(vid, "3021");
+
+  ASSERT_TRUE(vi->get_session_cnt() == 0);
+
+  delete scheduler;
+}
+
 
 std::atomic_int request_count = 0;
 std::atomic_int complete_count = 0;
@@ -177,12 +226,13 @@ TEST(MDSDmclockScheduler, IssueClientRequest)
   MDSDmclockScheduler *scheduler = create_dmclock_scheduler();
   scheduler->enable_qos_feature();
 
+  SessionId sid = "323400";
   VolumeId vid = "/";
   double reservation = 10.0;
   double weight = 20.0;
   double limit = 30.0;
   bool use_default = false;
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, sid, reservation, weight, limit, use_default);
 
   for (int i = 0; i < 20; i++) {
     request_count++;
@@ -216,12 +266,13 @@ TEST(MDSDmclockScheduler, CancelClientRequest)
   MDSDmclockScheduler *scheduler = create_dmclock_scheduler();
   scheduler->enable_qos_feature();
 
+  SessionId sid = "23423";
   VolumeId vid = "/";
   double reservation = 100.0;
   double weight = 200.0;
   double limit = 300.0;
   bool use_default = false;
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, sid, reservation, weight, limit, use_default);
 
   for (int i = 0; i < 10; i++) {
     request_count++;
@@ -254,12 +305,13 @@ TEST(MDSDmclockScheduler, IssueUpdateRequest)
   scheduler->enable_qos_feature();
   atomic_int update_count = 0;
 
+  SessionId sid = "323423";
   VolumeId vid = "/";
   double reservation = 100.0;
   double weight = 200.0;
   double limit = 300.0;
   bool use_default = false;
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, sid, reservation, weight, limit, use_default);
 
   std::mutex m;
   std::unique_lock<std::mutex> lk(m);
@@ -301,12 +353,13 @@ TEST(MDSDmclockScheduler, IssueMixRequest)
   scheduler->enable_qos_feature();
   atomic_int update_count = 0;
 
+  SessionId sid = "33343";
   VolumeId vid = "/";
   double reservation = 100.0;
   double weight = 200.0;
   double limit = 300.0;
   bool use_default = false;
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, sid, reservation, weight, limit, use_default);
 
   std::mutex m;
   std::unique_lock<std::mutex> lk(m);

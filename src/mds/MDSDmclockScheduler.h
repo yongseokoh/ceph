@@ -44,6 +44,7 @@ using crimson::dmclock::ReqParams;
 using Time = double;
 using ClientId = std::string;
 using VolumeId = ClientId;
+using SessionId = std::string;
 using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
@@ -148,16 +149,14 @@ public:
 
 class VolumeInfo : public QoSInfo {
 private:
-  int32_t session_cnt;
   bool use_default;
+  std::set<SessionId> session_list;
 
 public:
-  explicit VolumeInfo(const double reservation, const double weight, const double limit, const bool _use_default): 
-    QoSInfo(reservation, weight, limit), session_cnt(1), use_default(_use_default) {};
+  explicit VolumeInfo():
+    QoSInfo(0.0, 0.0, 0.0), use_default(true) {};
 
-  void inc_ref_cnt() { session_cnt++; };
-  void dec_ref_cnt() { session_cnt--; };
-  int32_t get_ref_cnt() { return session_cnt; };
+  int32_t get_session_cnt() { return session_list.size(); };
   
   bool is_use_default()
   {
@@ -174,7 +173,20 @@ public:
     set_weight(weight);
     set_limit(limit);
     set_use_default(use_default);
-  };
+  }
+
+  void add_session(const SessionId &sid)
+  {
+    session_list.insert(sid);
+  }
+
+  void remove_session(const SessionId &sid)
+  {
+    auto it = session_list.find(sid);
+    if (it != session_list.end()) {
+      session_list.erase(it);
+    }
+  }
 };
 
 ostream& operator<<(ostream& os, const VolumeInfo* vi);
@@ -227,18 +239,18 @@ public:
   }
 
   /* volume QoS info management */
-  void create_volume_info(const VolumeId &id, const double reservation, const double weight, const double limit, const bool use_default);
-  void update_volume_info(const VolumeId &id, const double reservation, const double weight, const double limit, const bool use_default);
-  VolumeInfo *get_volume_info(const VolumeId &id);
-  void delete_volume_info(const VolumeId &id);
-  void set_default_volume_info(const VolumeId &id);
+  void create_volume_info(const VolumeId &vid, const SessionId &sid, const double reservation, const double weight, const double limit, const bool use_default);
+  void update_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default);
+  VolumeInfo *get_volume_info(const VolumeId &vid);
+  void delete_volume_info(const VolumeId &vid, const SessionId &sid);
+  void set_default_volume_info(const VolumeId &vid);
   void dump_volume_info(Formatter *f) const;
-  void create_qos_info_from_xattr(const VolumeId &id);
-  void update_qos_info_from_xattr(const VolumeId &id);
+  void create_qos_info_from_xattr(const VolumeId &vid, const SessionId &sid);
+  void update_qos_info_from_xattr(const VolumeId &vid);
   void delete_qos_info_by_session(Session *session);
 
   /* multi MDS broadcast message */
-  void broadcast_qos_info_update_to_mds(const VolumeId& id);
+  void broadcast_qos_info_update_to_mds(const VolumeId& vid);
   void handle_qos_info_update_message(const cref_t<MDSDmclockQoS> &m);
   void proc_message(const cref_t<Message> &m);
 
@@ -246,14 +258,14 @@ public:
   template<typename R>
   void enqueue_client_request(const R &mds_req, VolumeId volume_id);
   void submit_request_to_mds(const VolumeId &, std::unique_ptr<ClientRequest> &&, const PhaseType&, const uint64_t);
-  const ClientInfo *get_client_info(const VolumeId &id);
+  const ClientInfo *get_client_info(const VolumeId &vid);
 
   void handle_conf_change(const std::set<std::string>& changed);
 
   void enable_qos_feature();
   void disable_qos_feature();
 
-  CInode *read_xattrs(const VolumeId id);
+  CInode *read_xattrs(const VolumeId vid);
 
   /* request event handler */
   void begin_schedule_thread();
@@ -266,11 +278,12 @@ public:
   bool need_request_completed;
 
   std::deque<std::unique_ptr<Request>> request_queue;
-  void enqueue_update_request(const VolumeId& id);
-  void enqueue_update_request(const VolumeId& id, RequestCB cb_func);
+  void enqueue_update_request(const VolumeId& vid);
+  void enqueue_update_request(const VolumeId& vid, RequestCB cb_func);
   uint32_t get_request_queue_size();
 
   const VolumeId& get_volume_id(Session *session);
+  const SessionId get_session_id(Session *session);
 
   using RejectThreshold = Time;
   using AtLimitParam = boost::variant<AtLimit, RejectThreshold>;
