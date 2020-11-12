@@ -36,14 +36,14 @@ protected:
 #ifndef MASTER_VERSION
   MDSDmclockQoS() : MessageInstance(MSG_MDS_DMCLOCK_QOS) {}
 #else
-  MDSDmclockQoS() : MMDSOp{MSG_MDS_FINDINO, HEAD_VERSION, COMPAT_VERSION} {}
+  MDSDmclockQoS() : MMDSOp{MSG_MDS_DMCLOCK_QOS, HEAD_VERSION, COMPAT_VERSION} {}
 #endif
 #ifndef MASTER_VERSION
   MDSDmclockQoS(const std::string& _volume_id) : MessageInstance(MSG_MDS_DMCLOCK_QOS) {
     this->volume_id= _volume_id;
   }
 #else
-  MDSDmclockQoS(const std::string& _volume_id) : MMDSOp{MSG_MDS_FINDINO, HEAD_VERSION, COMPAT_VERSION}, volume_id(_volume_id) {}
+  MDSDmclockQoS(const std::string& _volume_id) : MMDSOp{MSG_MDS_DMCLOCK_QOS, HEAD_VERSION, COMPAT_VERSION}, volume_id(_volume_id) {}
 #endif
   ~MDSDmclockQoS() override {}
 
@@ -55,8 +55,10 @@ public:
     encode(volume_id, payload);
   }
   void decode_payload() override {
+    using ceph::decode;
     auto p = payload.cbegin();
     decode(volume_id, p);
+    ceph_assert(p.end());
   }
 
 #ifdef MASTER_VERSION
