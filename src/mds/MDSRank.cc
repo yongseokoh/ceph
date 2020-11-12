@@ -1181,7 +1181,8 @@ bool MDSRank::is_valid_message(const cref_t<Message> &m) {
       type == MSG_MDS_SCRUB_STATS ||
       type == CEPH_MSG_CLIENT_CAPS ||
       type == CEPH_MSG_CLIENT_CAPRELEASE ||
-      type == CEPH_MSG_CLIENT_LEASE) {
+      type == CEPH_MSG_CLIENT_LEASE ||
+      type == MSG_MDS_DMCLOCK_QOS) {
     return true;
   }
 
