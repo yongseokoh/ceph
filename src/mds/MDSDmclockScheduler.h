@@ -34,6 +34,8 @@
 #include "dmclock/src/dmclock_server.h"
 #include "CInode.h"
 
+class ClientRequest;
+
 using MDSReqRef = cref_t<MClientRequest>;
 using crimson::dmclock::ClientInfo;
 using crimson::dmclock::AtLimit;
@@ -42,6 +44,12 @@ using crimson::dmclock::ReqParams;
 using Time = double;
 using ClientId = std::string;
 using VolumeId = ClientId;
+using std::placeholders::_1;
+using std::placeholders::_2;
+using std::placeholders::_3;
+using std::placeholders::_4;
+
+using Queue = crimson::dmclock::PushPriorityQueue<VolumeId, ClientRequest>;
 
 constexpr std::string_view ROOT_VOLUME_ID = "/";
 
@@ -50,14 +58,18 @@ enum class RequestType {
   UPDATE_REQUEST
 };
 
+using RequestCB = std::function<void()>;
+
 class Request {
 private:
   RequestType type;
   VolumeId volume_id;
-
 public:
-  explicit Request(RequestType _type, VolumeId _volume_id) :
+  Request(RequestType _type, VolumeId _volume_id) :
     type(_type), volume_id(_volume_id) {};
+
+  Request(RequestType _type, VolumeId _volume_id, RequestCB _cb_func) :
+    type(_type), volume_id(_volume_id), cb_func(_cb_func) {};
 
   RequestType get_request_type() const
   {
@@ -68,6 +80,7 @@ public:
   {
     return volume_id;
   }
+  RequestCB cb_func;
 };
 
 class ClientRequest : public Request {
@@ -85,6 +98,8 @@ class UpdateRequest : public Request {
 public:
   UpdateRequest(VolumeId _id):
     Request(RequestType::UPDATE_REQUEST, _id) {};
+  UpdateRequest(VolumeId _id, RequestCB _cb_func):
+    Request(RequestType::UPDATE_REQUEST, _id, _cb_func) {};
 };
 
 class QoSInfo : public ClientInfo {
@@ -194,12 +209,13 @@ enum class SchedulerState {
   SHUTDOWN,
 };
 
+class MDSRank;
+
 class MDSDmclockScheduler {
 private:
   mds_dmclock_conf default_conf;
   SchedulerState state;
   MDSRank *mds;
-  using Queue = crimson::dmclock::PushPriorityQueue<VolumeId, ClientRequest>;
   Queue *dmclock_queue;
   std::map<VolumeId, VolumeInfo> volume_info_map;
 
@@ -227,6 +243,8 @@ public:
   void proc_message(const cref_t<Message> &m);
 
   void handle_mds_request(const MDSReqRef &req);
+  template<typename R>
+  void enqueue_client_request(const R &mds_req, VolumeId volume_id);
   void submit_request_to_mds(const VolumeId &, std::unique_ptr<ClientRequest> &&, const PhaseType&, const uint64_t);
   const ClientInfo *get_client_info(const VolumeId &id);
 
@@ -249,6 +267,7 @@ public:
 
   std::deque<std::unique_ptr<Request>> request_queue;
   void enqueue_update_request(const VolumeId& id);
+  void enqueue_update_request(const VolumeId& id, RequestCB cb_func);
   uint32_t get_request_queue_size();
 
   const VolumeId& get_volume_id(Session *session);
@@ -256,13 +275,35 @@ public:
   using RejectThreshold = Time;
   using AtLimitParam = boost::variant<AtLimit, RejectThreshold>;
 
-  explicit MDSDmclockScheduler(MDSRank *m) : mds(m)
+  MDSDmclockScheduler(MDSRank *m, const Queue::ClientInfoFunc _client_info_func,
+      const Queue::CanHandleRequestFunc _can_handle_func,
+      const Queue::HandleRequestFunc _handle_request_func) : mds(m)
   {
-    dmclock_queue = new Queue(
-        std::bind(&MDSDmclockScheduler::get_client_info, this, std::placeholders::_1),
-        {[]()->bool{ return true;}},
-        std::bind(&MDSDmclockScheduler::submit_request_to_mds, this, std::placeholders::_1,
-          std::placeholders::_2, std::placeholders::_3, std::placeholders::_4));
+    Queue::ClientInfoFunc client_info_func;
+    Queue::CanHandleRequestFunc can_handle_func;
+    Queue::HandleRequestFunc handle_request_func;
+
+    if (_client_info_func) {
+      client_info_func = _client_info_func;
+    } else {
+      client_info_func = std::bind(&MDSDmclockScheduler::get_client_info, this, _1);
+    }
+
+    if (_can_handle_func) {
+      can_handle_func = _can_handle_func;
+    } else {
+      can_handle_func = []()->bool{ return true;};
+    }
+
+    if (_handle_request_func) {
+      handle_request_func = _handle_request_func;
+    } else {
+      handle_request_func = std::bind(&MDSDmclockScheduler::submit_request_to_mds, this, _1, _2, _3, _4);
+    }
+
+    dmclock_queue = new Queue(client_info_func,
+        can_handle_func,
+        handle_request_func);
 
     state = SchedulerState::RUNNING;
 
@@ -275,7 +316,28 @@ public:
 
     ceph_assert(ROOT_VOLUME_ID == "/");
   }
+
+  MDSDmclockScheduler(MDSRank *m) :
+    MDSDmclockScheduler(m,
+        /* TODO */
+      std::bind(&MDSDmclockScheduler::get_client_info, this, _1),
+      {[]()->bool{ return true;}},
+      std::bind(&MDSDmclockScheduler::submit_request_to_mds, this, _1, _2, _3, _4))
+  {
+    // empty
+  }
+
   ~MDSDmclockScheduler();
+
+  SessionMap *get_session_map();
+  mds_rank_t get_nodeid();
+  void mds_lock();
+  void mds_unlock();
+  int mds_is_locked_by_me();
+  Queue *get_dmclock_queue()
+  {
+    return dmclock_queue;
+  }
 
   void shutdown();
   friend ostream& operator<<(ostream& os, const VolumeInfo* vi);
