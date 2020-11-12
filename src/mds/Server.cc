@@ -834,8 +834,9 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
     // close must have been canceled (by an import?), or any number of other things..
   } else if (open) {
     if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
-      auto client_root_entry = session->info.client_metadata.find("root");
-      mds->mds_dmclock_scheduler->create_qos_info_from_xattr(client_root_entry->second);
+      auto vid = session->info.client_metadata.find("root")->second;
+      auto sid = to_string(session->info.inst.name.num());
+      mds->mds_dmclock_scheduler->create_qos_info_from_xattr(vid, sid);
     }
     ceph_assert(session->is_opening());
     mds->sessionmap.set_state(session, Session::STATE_OPEN);
