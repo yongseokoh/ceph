@@ -793,7 +793,6 @@ class LocalFuseMount(FuseMount):
                     d = asok_conf.groups(1)[0]
                     break
         path = "{0}/client.{1}.*.asok".format(d, self.client_id)
-
         return path
 
     def mount(self, mntopts=[], createfs=True, check_status=True, **kwargs):
@@ -868,6 +867,7 @@ class LocalFuseMount(FuseMount):
         log.info("Mounting client.{0} with pid "
                  "{1}".format(self.client_id, self.fuse_daemon.subproc.pid))
 
+        # Wait for the connection reference to appear in /sys
         waited = 0
         post_mount_conns = list_connections()
         while len(post_mount_conns) <= len(pre_mount_conns):
