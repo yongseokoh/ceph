@@ -233,19 +233,25 @@ private:
 
 public:
 
+  std::map<VolumeId, VolumeInfo> &get_volume_info_map()
+  {
+    return volume_info_map;
+  }
   mds_dmclock_conf get_default_conf()
   {
     return default_conf;
   }
 
   /* volume QoS info management */
-  void create_volume_info(const VolumeId &vid, const SessionId &sid, const double reservation, const double weight, const double limit, const bool use_default);
+  void create_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default);
+  void add_session_to_volume_info(const VolumeId &vid, const SessionId &sid);
   void update_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default);
   VolumeInfo *get_volume_info(const VolumeId &vid);
-  void delete_volume_info(const VolumeId &vid, const SessionId &sid);
+  void delete_session_from_volume_info(const VolumeId &vid, const SessionId &sid);
   void set_default_volume_info(const VolumeId &vid);
   void dump_volume_info(Formatter *f) const;
-  void create_qos_info_from_xattr(const VolumeId &vid, const SessionId &sid);
+
+  void create_qos_info_from_xattr(Session *session);
   void update_qos_info_from_xattr(const VolumeId &vid);
   void delete_qos_info_by_session(Session *session);
 
