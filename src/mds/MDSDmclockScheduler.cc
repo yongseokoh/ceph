@@ -157,24 +157,34 @@ VolumeInfo *MDSDmclockScheduler::get_volume_info(const VolumeId &vid)
   return nullptr;
 }
 
-void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const SessionId &sid, const double reservation, const double weight, const double limit, const bool use_default)
+void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default)
 {
   VolumeInfo* vi = get_volume_info(vid);
 
   dout(0) << "create_volume_info() reservation = " << reservation << " weight " << weight <<
     " limit " << limit << " use_default " << use_default<< dendl;
+
   if (vi == nullptr) {
     auto [it, success]  = volume_info_map.insert(std::make_pair(std::move(vid), std::move(VolumeInfo())));
     ceph_assert(success==true);
     vi = &it->second;
   }
-  vi->add_session(sid);
   vi->update_volume_info(reservation, weight, limit, use_default);
 
   enqueue_update_request(vid);
 }
 
-void MDSDmclockScheduler::delete_volume_info(const VolumeId &vid, const SessionId &sid)
+void MDSDmclockScheduler::add_session_to_volume_info(const VolumeId &vid, const SessionId &sid)
+{
+  dout(1) << __func__ << dendl;
+
+  VolumeInfo* vi = get_volume_info(vid);
+  if (vi) {
+    vi->add_session(sid);
+  }
+}
+
+void MDSDmclockScheduler::delete_session_from_volume_info(const VolumeId &vid, const SessionId &sid)
 {
   auto it = volume_info_map.find(vid);
   if (it != volume_info_map.end()) {
@@ -218,43 +228,55 @@ ostream& operator<<(ostream& os, VolumeInfo* vi)
   return os;
 }
 
-void MDSDmclockScheduler::create_qos_info_from_xattr(const VolumeId &vid, const SessionId &sid)
+void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
 {
+  if (session == nullptr) {
+    return;
+  }
+
+  VolumeId vid = get_volume_id(session);
+  SessionId sid = get_session_id(session);
 
   dout(0) << "create_qos_info_from_xattr() root = " << vid<<  dendl;
 
-  CInode *in = read_xattrs(vid);
-  auto pip = in->get_projected_inode();
+  if (get_volume_info(vid) == nullptr) {
+    CInode *in = read_xattrs(vid);
+    auto pip = in->get_projected_inode();
 
-  bool qos_valid = (in &&
-                    pip->dmclock_info.mds_reservation > 0.0 &&
-		    pip->dmclock_info.mds_weight > 0.0 &&
-		    pip->dmclock_info.mds_limit > 0.0);
+    bool qos_valid = (in &&
+                      pip->dmclock_info.mds_reservation > 0.0 &&
+                      pip->dmclock_info.mds_weight > 0.0 &&
+                      pip->dmclock_info.mds_limit > 0.0);
 
-  double reservation;
-  double weight;
-  double limit;
-  bool use_default;
+    double reservation;
+    double weight;
+    double limit;
+    bool use_default;
 
-  if (in && qos_valid) {
-    reservation = pip->dmclock_info.mds_reservation;
-    weight = pip->dmclock_info.mds_weight;
-    limit = pip->dmclock_info.mds_limit;
-    use_default = false;
-  } else {
-    reservation = 0.0;
-    weight = 0.0;
-    limit = 0.0;
-    use_default = true;
-  }
+    if (in && qos_valid) {
+      reservation = pip->dmclock_info.mds_reservation;
+      weight = pip->dmclock_info.mds_weight;
+      limit = pip->dmclock_info.mds_limit;
+      use_default = false;
+    } else {
+      reservation = 0.0;
+      weight = 0.0;
+      limit = 0.0;
+      use_default = true;
+    }
 
-  create_volume_info(vid, sid, reservation, weight, limit, use_default);
+    create_volume_info(vid, reservation, weight, limit, use_default);
+  } 
+  add_session_to_volume_info(vid, sid);
 }
 
 void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid)
 {
-
   dout(0) << "update_qos_info_from_xattr() root = " << vid <<  dendl;
+
+  if (get_volume_info(vid) == nullptr) {
+    return;
+  }
 
   CInode *in = read_xattrs(vid);
   auto pip = in->get_projected_inode();
@@ -290,7 +312,7 @@ void MDSDmclockScheduler::delete_qos_info_by_session(Session *session)
   VolumeId vid = get_volume_id(session);
   SessionId sid = get_session_id(session);
   dout(0) << "delete qos info when session is closed (volume_id " << vid << ")" << dendl;
-  delete_volume_info(vid, sid);
+  delete_session_from_volume_info(vid, sid);
 }
 
 void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& vid)
@@ -487,16 +509,12 @@ void MDSDmclockScheduler::enable_qos_feature()
 
   if (auto it = sessionmap->by_state.find(Session::STATE_OPEN); it != sessionmap->by_state.end()) {
     for (const auto &session : *(it->second)) {
-      auto vid = session->info.client_metadata.find("root")->second;
-      auto sid = to_string(session->info.inst.name.num());
-      create_qos_info_from_xattr(vid, sid);
+      create_qos_info_from_xattr(session);
     }
   }
   if (auto it = sessionmap->by_state.find(Session::STATE_STALE); it != sessionmap->by_state.end()) {
     for (const auto &session : *(it->second)) {
-      auto vid = session->info.client_metadata.find("root")->second;
-      auto sid = to_string(session->info.inst.name.num());
-      create_qos_info_from_xattr(vid, sid);
+      create_qos_info_from_xattr(session);
     }
   }
 }
