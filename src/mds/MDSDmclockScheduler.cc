@@ -76,6 +76,8 @@ void MDSDmclockScheduler::submit_request_to_mds(const VolumeId& vid, std::unique
   mds->server->handle_client_request(req);
 
   mds_unlock();
+
+  decrease_inflight_request(request->get_volume_id());
 }
 
 void MDSDmclockScheduler::shutdown()
@@ -155,6 +157,24 @@ VolumeInfo *MDSDmclockScheduler::get_volume_info(const VolumeId &vid)
     return &it->second;
   }
   return nullptr;
+}
+
+void MDSDmclockScheduler::increase_inflight_request(const VolumeId &vid)
+{
+  VolumeInfo* vi = get_volume_info(vid);
+  vi->increase_inflight_request();
+}
+
+void MDSDmclockScheduler::decrease_inflight_request(const VolumeId &vid)
+{
+  VolumeInfo* vi = get_volume_info(vid);
+  vi->decrease_inflight_request();
+}
+
+int MDSDmclockScheduler::get_inflight_request(const VolumeId &vid)
+{
+  VolumeInfo* vi = get_volume_info(vid);
+  return vi->get_inflight_request();
 }
 
 void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default)
@@ -414,6 +434,8 @@ void MDSDmclockScheduler::process_request()
             dout(0) << "Pop client request (size " << request_queue.size() << " volume_id "
                 << c_request->get_volume_id() << " time " << c_request->time << " cost " << c_request->cost << ")" << dendl;
 
+            increase_inflight_request(c_request->get_volume_id());
+
             auto r = dmclock_queue->add_request(std::move(c_request), std::move(c_request->get_volume_id()),
                 {0, 0}, c_request->time, c_request->cost);
 
@@ -499,6 +521,29 @@ void MDSDmclockScheduler::enable_qos_feature()
   }
 }
 
+void MDSDmclockScheduler::cancel_inflight_request()
+{
+  std::list<Queue::RequestRef> req_list;
+
+  auto accum_f = [&req_list] (Queue::RequestRef&& r)
+                  {
+                    req_list.push_front(std::move(r));
+                  };
+
+  for (auto it : volume_info_map) {
+    if (it.second.get_inflight_request()) {
+      dmclock_queue->remove_by_client(it.first, true, accum_f);
+    }
+  }
+
+  dout(0) << "Canceled Requests " << req_list.size() << dendl; 
+  for (auto& it : req_list) {
+    dout(0) << "Cancel Request " << it->get_volume_id() << dendl; 
+    handle_request_func(it->get_volume_id(), std::move(it), PhaseType::reservation, 1);
+  }
+  ceph_assert(dmclock_queue->empty() == true);
+}
+
 void MDSDmclockScheduler::disable_qos_feature()
 {
   uint32_t queue_size;
@@ -506,19 +551,25 @@ void MDSDmclockScheduler::disable_qos_feature()
 
   dout(0) << "disable_qos_feature()" << dendl;
 
+  default_conf.set_status(false);
+
   do
   {
     mds_unlock();
-
+    queue_cvar.notify_all();
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
     queue_size = get_request_queue_size();
-    dmclock_empty = dmclock_queue->empty();
-
     mds_lock();
-  } while(queue_size || !dmclock_empty);
+  } while(queue_size);
 
-  default_conf.set_status(false);
+  do
+  {
+    mds_unlock();
+    cancel_inflight_request();
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    dmclock_empty = dmclock_queue->empty();
+    mds_lock();
+  } while(!dmclock_empty);
 
   auto sessionmap = get_session_map();
 
