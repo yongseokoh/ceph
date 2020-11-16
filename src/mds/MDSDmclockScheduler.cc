@@ -394,18 +394,6 @@ void MDSDmclockScheduler::enqueue_update_request(const VolumeId& vid, RequestCB 
     queue_cvar.notify_all();
 }
 
-void MDSDmclockScheduler::invoke_request_completed()
-{
-  if (default_conf.is_enabled() == false) {
-    return;
-  }
-
-  std::unique_lock<std::mutex> lock(queue_mutex);
-  dout(0) << __func__ << dendl;
-  need_request_completed = true;
-  queue_cvar.notify_all();
-}
-
 void MDSDmclockScheduler::process_request()
 {
     std::unique_lock<std::mutex> lock(queue_mutex);
@@ -448,24 +436,12 @@ void MDSDmclockScheduler::process_request()
 
         lock.lock();
       }
-
-      if (need_request_completed == true) {
-        need_request_completed = false;
-        lock.unlock();
-
-        dmclock_queue->request_completed();
-        dout(0) << "Pop request completed request "<< dendl;
-
-        lock.lock();
-      }
     }
     dout(0) << "scheduler_thread has been stopped." << dendl;
 }
 
 void MDSDmclockScheduler::begin_schedule_thread()
 {
-  need_request_completed = false;
-
   scheduler_thread = std::thread([this](){process_request();});
 }
 

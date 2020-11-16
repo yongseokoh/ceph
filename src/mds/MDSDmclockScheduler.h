@@ -280,9 +280,6 @@ public:
   mutable std::mutex queue_mutex;
   std::condition_variable queue_cvar;
 
-  void invoke_request_completed();
-  bool need_request_completed;
-
   std::deque<std::unique_ptr<Request>> request_queue;
   void enqueue_update_request(const VolumeId& vid);
   void enqueue_update_request(const VolumeId& vid, RequestCB cb_func);
