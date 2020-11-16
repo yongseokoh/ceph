@@ -366,6 +366,12 @@ TEST(MDSDmclockScheduler, IssueClientRequest)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
+  for (int i = 0; i < 100; i++) {
+    request_count++;
+    MDSReqRef req;
+    scheduler->enqueue_client_request<MDSReqRef>(req, vid);
+  }
+
   /* TODO: schedule() function needs to be triggered  */
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
@@ -380,31 +386,18 @@ TEST(MDSDmclockScheduler, CancelClientRequest)
 
   SessionId sid = "23423";
   VolumeId vid = "/";
-  double reservation = 100.0;
-  double weight = 200.0;
-  double limit = 300.0;
+  double reservation = 10.0;
+  double weight = 20.0;
+  double limit = 30.0;
   bool use_default = false;
   scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
   scheduler->add_session_to_volume_info(vid, sid);
 
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 1000; i++) {
     request_count++;
     MDSReqRef req;
     scheduler->enqueue_client_request<MDSReqRef>(req, vid);
   }
-
-  std::list<Queue::RequestRef> req_list;
-  auto accum_f = [&req_list] (Queue::RequestRef&& r)
-                  {
-                    req_list.push_front(std::move(r));
-                    cancel_count++;
-                    dout(0) << "cancel request " << cancel_count << dendl;
-                  };
-
-  /* TODO: sometimes client request are not at dmclock queue (request_queue -> dmclock queue) */
-  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-  scheduler->get_dmclock_queue()->remove_by_client(vid, true, accum_f);
 
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
