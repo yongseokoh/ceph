@@ -2137,8 +2137,6 @@ void Server::reply_client_request(MDRequestRef& mdr, const ref_t<MClientReply> &
   ceph_assert(mdr.get());
   const cref_t<MClientRequest> &req = mdr->client_request;
   
-  mds->mds_dmclock_scheduler->invoke_request_completed();
-
   dout(7) << "reply_client_request " << reply->get_result()
 	   << " (" << cpp_strerror(reply->get_result())
 	   << ") " << *req << dendl;

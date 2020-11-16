@@ -525,7 +525,7 @@ void MDSDmclockScheduler::enable_qos_feature()
 
 void MDSDmclockScheduler::disable_qos_feature()
 {
-  uint32_t queue_thread_count, dmclock_request_count;
+  uint32_t queue_size;
   bool dmclock_empty;
 
   dout(0) << "disable_qos_feature()" << dendl;
@@ -536,17 +536,11 @@ void MDSDmclockScheduler::disable_qos_feature()
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-    invoke_request_completed();
-
-    queue_thread_count = get_request_queue_size();
-    dmclock_request_count = dmclock_queue->request_count();
+    queue_size = get_request_queue_size();
     dmclock_empty = dmclock_queue->empty();
 
-    dout(0) << "queue thread request " << queue_thread_count << " dmclock request " << dmclock_request_count << dendl;
-    dout(0) << *dmclock_queue << dendl;
-
     mds_lock();
-  } while(queue_thread_count || !dmclock_empty);
+  } while(queue_size || !dmclock_empty);
 
   default_conf.set_status(false);
 
