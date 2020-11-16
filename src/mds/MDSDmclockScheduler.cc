@@ -396,6 +396,10 @@ void MDSDmclockScheduler::enqueue_update_request(const VolumeId& vid, RequestCB 
 
 void MDSDmclockScheduler::invoke_request_completed()
 {
+  if (default_conf.is_enabled() == false) {
+    return;
+  }
+
   std::unique_lock<std::mutex> lock(queue_mutex);
   dout(0) << __func__ << dendl;
   need_request_completed = true;
@@ -526,8 +530,6 @@ void MDSDmclockScheduler::disable_qos_feature()
 
   dout(0) << "disable_qos_feature()" << dendl;
 
-  default_conf.set_status(false);
-
   do
   {
     mds_unlock();
@@ -545,6 +547,8 @@ void MDSDmclockScheduler::disable_qos_feature()
 
     mds_lock();
   } while(queue_thread_count || !dmclock_empty);
+
+  default_conf.set_status(false);
 
   auto sessionmap = get_session_map();
 
