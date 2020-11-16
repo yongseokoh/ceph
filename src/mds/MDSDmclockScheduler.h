@@ -151,6 +151,7 @@ class VolumeInfo : public QoSInfo {
 private:
   bool use_default;
   std::set<SessionId> session_list;
+  int inflight_requests;
 
 public:
   explicit VolumeInfo():
@@ -186,6 +187,18 @@ public:
     if (it != session_list.end()) {
       session_list.erase(it);
     }
+  }
+
+  int get_inflight_request() {
+    return inflight_requests;
+  }
+
+  void increase_inflight_request() {
+    inflight_requests++;
+  }
+
+  void decrease_inflight_request() {
+    inflight_requests--;
   }
 };
 
@@ -291,14 +304,14 @@ public:
   using RejectThreshold = Time;
   using AtLimitParam = boost::variant<AtLimit, RejectThreshold>;
 
+  Queue::ClientInfoFunc client_info_func;
+  Queue::CanHandleRequestFunc can_handle_func;
+  Queue::HandleRequestFunc handle_request_func;
+
   MDSDmclockScheduler(MDSRank *m, const Queue::ClientInfoFunc _client_info_func,
       const Queue::CanHandleRequestFunc _can_handle_func,
       const Queue::HandleRequestFunc _handle_request_func) : mds(m)
   {
-    Queue::ClientInfoFunc client_info_func;
-    Queue::CanHandleRequestFunc can_handle_func;
-    Queue::HandleRequestFunc handle_request_func;
-
     if (_client_info_func) {
       client_info_func = _client_info_func;
     } else {
@@ -354,6 +367,11 @@ public:
   {
     return dmclock_queue;
   }
+
+  void cancel_inflight_request();
+  void increase_inflight_request(const VolumeId &vid);
+  void decrease_inflight_request(const VolumeId &vid);
+  int get_inflight_request(const VolumeId &vid);
 
   void shutdown();
   friend ostream& operator<<(ostream& os, const VolumeInfo* vi);
