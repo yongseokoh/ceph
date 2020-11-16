@@ -54,7 +54,7 @@ void MDSDmclockScheduler::handle_mds_request(const MDSReqRef &mds_req)
 
   auto volume_id = get_volume_id(mds->get_session(mds_req));
 
-  if (mds->mds_dmclock_scheduler->default_conf.is_enabled() == true && volume_id != ROOT_VOLUME_ID) {
+  if (mds->mds_dmclock_scheduler->default_conf.is_enabled() == true) {
     dout(0) << "add request to add thread " << volume_id << dendl;
     enqueue_client_request<MDSReqRef>(mds_req, volume_id);
   } else {
