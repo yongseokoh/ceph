@@ -1,0 +1,12 @@
+../qa/tasks/cephfs/test_admin.py
+../qa/tasks/cephfs/test_auto_repair.py
+../qa/tasks/cephfs/test_backtrace.py
+../qa/tasks/cephfs/test_damage.py
+../qa/tasks/cephfs/test_flush.py
+../qa/tasks/cephfs/test_fragment.py
+../qa/tasks/cephfs/test_multifs_auth.py
+../qa/tasks/cephfs/test_pool_perm.py
+../qa/tasks/cephfs/test_quota.py
+../qa/tasks/cephfs/test_readahead.py
+../qa/tasks/cephfs/test_recovery_pool.py
+../qa/tasks/cephfs/test_scrub.py
