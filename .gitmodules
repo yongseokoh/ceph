@@ -52,7 +52,7 @@
 [submodule "src/dmclock"]
 	path = src/dmclock
     url = https://github.com/yongseokoh/dmclock.git
-	branch = fix-cv-wait
+	branch = mds-dmclock-master
 [submodule "src/seastar"]
 	path = src/seastar
 	url = https://github.com/ceph/seastar.git
