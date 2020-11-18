@@ -10,8 +10,8 @@ L=100
 
 ${BUILD_PATH}/bin/ceph fs set a max_mds $NUM_MDS
 
-${BUILD_PATH}/bin/ceph --admin-daemon ${BUILD_PATH}/out/mds.a.asok config set mds_dmclock_mds_qos_enable true
-${BUILD_PATH}/bin/ceph --admin-daemon ${BUILD_PATH}/out/mds.b.asok config set mds_dmclock_mds_qos_enable true
+${BUILD_PATH}/bin/ceph --admin-daemon ${BUILD_PATH}/out/mds.a.asok config set mds_dmclock_mds_qos_enable $1
+${BUILD_PATH}/bin/ceph --admin-daemon ${BUILD_PATH}/out/mds.b.asok config set mds_dmclock_mds_qos_enable $1
 
 ${BUILD_PATH}/bin/ceph --admin-daemon ${BUILD_PATH}/out/mds.a.asok config set mds_dmclock_mds_qos_default_reservation ${R}
 ${BUILD_PATH}/bin/ceph --admin-daemon ${BUILD_PATH}/out/mds.a.asok config set mds_dmclock_mds_qos_default_weight ${W}
