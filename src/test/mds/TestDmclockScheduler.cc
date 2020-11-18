@@ -305,7 +305,6 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
 std::atomic_int request_count = 0;
 std::atomic_int complete_count = 0;
-std::atomic_int cancel_count = 0;
 
 Queue::ClientInfoFunc client_info_f;
 Queue::CanHandleRequestFunc can_handle_f;
@@ -323,7 +322,6 @@ MDSDmclockScheduler *create_dmclock_scheduler()
 
   request_count = 0;
   complete_count = 0;
-  cancel_count = 0;
   return scheduler;
 }
 
@@ -402,7 +400,7 @@ TEST(MDSDmclockScheduler, CancelClientRequest)
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
 
-  ASSERT_TRUE(request_count==(complete_count+cancel_count));
+  ASSERT_TRUE(request_count==(complete_count));
 }
 
 TEST(MDSDmclockScheduler, IssueUpdateRequest)
