@@ -9,15 +9,13 @@ function run_test() {
     VSTART_LOG_PATH="$VSTART_LOG_PATH/$(date +experiment-%Y%m%d-%H:%M)-${3}"
     mkdir -p $VSTART_LOG_PATH
 
-    #echo $1 $2 $3
-    return
-
     for testfile in `cat ${1}`
     do
         filename=$(basename $testfile)
         filename="${filename%%.*}"
 
         echo test name $filename
+
         #echo "Wait for debugging, please enter any keys"
         #read test
 
