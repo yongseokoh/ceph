@@ -475,16 +475,12 @@ CInode *MDSDmclockScheduler::read_xattrs(const VolumeId vid)
   auto qos_msg = make_message<MDSDmclockQoS>(vid);
   CF_MDS_RetryMessageFactory cf(mds, qos_msg);
 
+  // Do not need to set qos at ROOT_VOLUME_ID
   if (vid != ROOT_VOLUME_ID) {
     CInode *cur = mds->mdcache->get_inode(path_.get_ino());  //get base_ino
     
     mds->mdcache->discover_path(cur, CEPH_NOSNAP, path_, NULL, false);	// must discover
     if (mds->logger) mds->logger->inc(l_mds_traverse_discover);
-  }
-  else { // vid == "/"
-    if (mds->get_nodeid() != mds->mdsmap->get_root()) {
-      mds->mdcache->discover_base_ino(MDS_INO_ROOT, cf.build(), mds->mdsmap->get_root());
-    }
   }
 
   MDRequestRef null_ref;
