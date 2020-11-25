@@ -19,6 +19,8 @@ MDS_RESTART_GRACE = 60
 
 
 class TestMDSAutoRepair(CephFSTestCase):
+    REQUIRE_MDS_QOS = True
+
     def test_backtrace_repair(self):
         """
         MDS should verify/fix backtrace on fetch dirfrag

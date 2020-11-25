@@ -21,6 +21,8 @@ class TestMultiFS(CapsHelper):
     MDSS_REQUIRED = 2
     CLIENTS_REQUIRED = 2
 
+    REQUIRE_MDS_QOS = True
+
     def setUp(self):
         super(TestMultiFS, self).setUp()
 

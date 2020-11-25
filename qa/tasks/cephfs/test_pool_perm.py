@@ -5,6 +5,7 @@ import os
 
 
 class TestPoolPerm(CephFSTestCase):
+    REQUIRE_MDS_QOS = True
     def test_pool_perm(self):
         self.mount_a.run_shell(["touch", "test_file"])
 

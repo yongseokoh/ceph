@@ -7,6 +7,8 @@ class TestQuota(CephFSTestCase):
     CLIENTS_REQUIRED = 2
     MDSS_REQUIRED = 1
 
+    REQUIRE_MDS_QOS = True
+
     def test_remote_update_getfattr(self):
         """
         That quota changes made from one client are visible to another

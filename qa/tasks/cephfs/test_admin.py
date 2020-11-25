@@ -18,6 +18,8 @@ class TestAdminCommands(CephFSTestCase):
     CLIENTS_REQUIRED = 1
     MDSS_REQUIRED = 1
 
+    REQUIRE_MDS_QOS = True
+
     def test_fsnames_can_only_by_goodchars(self):
         n = 'test_fsnames_can_only_by_goodchars'
         metapoolname, datapoolname = n+'-testmetapool', n+'-testdatapool'

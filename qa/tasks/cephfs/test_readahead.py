@@ -6,6 +6,9 @@ log = logging.getLogger(__name__)
 
 
 class TestReadahead(CephFSTestCase):
+
+    REQUIRE_MDS_QOS = True
+
     def test_flush(self):
         if not isinstance(self.mount_a, FuseMount):
             self.skipTest("FUSE needed for measuring op counts")
