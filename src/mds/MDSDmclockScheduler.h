@@ -243,6 +243,7 @@ private:
   MDSRank *mds;
   Queue *dmclock_queue;
   std::map<VolumeId, VolumeInfo> volume_info_map;
+  mutable std::mutex volume_info_lock;
 
 public:
 
@@ -259,7 +260,9 @@ public:
   void create_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default);
   void add_session_to_volume_info(const VolumeId &vid, const SessionId &sid);
   void update_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default);
-  VolumeInfo *get_volume_info(const VolumeId &vid);
+  VolumeInfo *get_volume_info_ptr(const VolumeId &vid);
+  bool copy_volume_info(const VolumeId &vid, VolumeInfo &vi);
+  bool check_volume_info_existence(const VolumeId &vid);
   void delete_session_from_volume_info(const VolumeId &vid, const SessionId &sid);
   void set_default_volume_info(const VolumeId &vid);
   void dump_volume_info(Formatter *f) const;
