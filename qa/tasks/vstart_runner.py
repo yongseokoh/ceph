@@ -1135,8 +1135,8 @@ class LocalMDSCluster(LocalCephCluster, MDSCluster):
         # FIXME: unimplemented
         pass
 
-    def newfs(self, name='cephfs', create=True):
-        return LocalFilesystem(self._ctx, name=name, create=create)
+    def newfs(self, name='cephfs', create=True, fs_config=None):
+        return LocalFilesystem(self._ctx, name=name, create=create, fs_config=fs_config)
 
     def delete_all_filesystems(self):
         """
@@ -1155,7 +1155,7 @@ class LocalMgrCluster(LocalCephCluster, MgrCluster):
 
 
 class LocalFilesystem(Filesystem, LocalMDSCluster):
-    def __init__(self, ctx, fscid=None, name=None, create=False, ec_profile=None):
+    def __init__(self, ctx, fscid=None, name=None, create=False, ec_profile=None, fs_config=None):
         # Deliberately skip calling parent constructor
         self._ctx = ctx
 
@@ -1166,7 +1166,7 @@ class LocalFilesystem(Filesystem, LocalMDSCluster):
         self.metadata_overlay = False
         self.data_pool_name = None
         self.data_pools = None
-        self.fs_config = None
+        self.fs_config = fs_config
 
         # Hack: cheeky inspection of ceph.conf to see what MDSs exist
         self.mds_ids = set()

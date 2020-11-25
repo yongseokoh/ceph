@@ -78,6 +78,9 @@ class CephFSTestCase(CephTestCase):
     # Whether to create the default filesystem during setUp
     REQUIRE_FILESYSTEM = True
 
+    # Whether to enable mds qos
+    REQUIRE_MDS_QOS = False
+
     # requires REQUIRE_FILESYSTEM = True
     REQUIRE_RECOVERY_FILESYSTEM = False
 
@@ -158,7 +161,10 @@ class CephFSTestCase(CephTestCase):
                 self.mds_cluster.mon_manager.raw_cluster_cmd("auth", "del", entry['entity'])
 
         if self.REQUIRE_FILESYSTEM:
-            self.fs = self.mds_cluster.newfs(create=True)
+            if self.REQUIRE_MDS_QOS:
+                self.fs = self.mds_cluster.newfs(create=True, fs_config={"max_mds": self.MDSS_REQUIRED, "enable_mds_qos":True})
+            else:
+                self.fs = self.mds_cluster.newfs(create=True)
 
             # In case some test messed with auth caps, reset them
             for client_id in client_mount_ids:

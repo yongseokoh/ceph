@@ -342,8 +342,8 @@ class MDSCluster(CephCluster):
         """
         self.mds_daemons[mds_id].signal(sig, silent);
 
-    def newfs(self, name='cephfs', create=True):
-        return Filesystem(self._ctx, name=name, create=create)
+    def newfs(self, name='cephfs', create=True, fs_config=None):
+        return Filesystem(self._ctx, name=name, create=create, fs_config=fs_config)
 
     def status(self):
         return FSStatus(self.mon_manager)
@@ -464,6 +464,7 @@ class Filesystem(MDSCluster):
         self.data_pool_name = None
         self.data_pools = None
         self.fs_config = fs_config
+        print(fs_config)
 
         client_list = list(misc.all_roles_of_type(self._ctx.cluster, 'client'))
         self.client_id = client_list[0]
@@ -580,6 +581,17 @@ class Filesystem(MDSCluster):
     def set_allow_new_snaps(self, yes):
         self.set_var("allow_new_snaps", yes, '--yes-i-really-mean-it')
 
+    def set_mds_qos(self, yes):
+        for id in self.mds_ids:
+            self.mds_asok(["config", "set", "mds_dmclock_mds_qos_enable", str(yes).lower()], mds_id=id)
+
+    def is_mds_qos(self):
+        result = []
+        for id in self.mds_ids:
+            result.append(self.mds_asok(["config", "get", "mds_dmclock_mds_qos_enable"], mds_id=id))
+
+        return all(row["mds_dmclock_mds_qos_enable"] == "true" for row in result)
+
     # In Octopus+, the PG count can be omitted to use the default. We keep the
     # hard-coded value for deployments of Mimic/Nautilus.
     pgs_per_fs_pool = 8
@@ -645,6 +657,10 @@ class Filesystem(MDSCluster):
             session_timeout = self.fs_config.get('session_timeout', 60)
             if session_timeout != 60:
                 self.set_session_timeout(session_timeout)
+
+            is_enable_mds_qos = self.fs_config.get('enable_mds_qos', False)
+            if is_enable_mds_qos:
+                self.set_mds_qos(True)
 
         self.getinfo(refresh = True)
 
