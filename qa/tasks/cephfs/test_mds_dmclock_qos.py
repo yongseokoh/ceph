@@ -10,6 +10,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
     CLIENTS_REQUIRED = 2
     MDSS_REQUIRED = 3
     REQUIRE_FILESYSTEM = True
+    REQUIRE_MDS_QOS = False
 
     TEST_SUBVOLUME_PREFIX = "subvolume_"
     TEST_SUBVOLUME_COUNT = 2
@@ -49,10 +50,12 @@ class TestMDSDmclockQoS(CephFSTestCase):
         """
         from copy import deepcopy
 
+        result = []
         origin = deepcopy(commands)
         for id in self.fs.mds_ids:
-            self.fs.mds_asok(commands, mds_id=id)
+            result.append(self.fs.mds_asok(commands, mds_id=id))
             commands = deepcopy(origin)
+        return result
 
     def get_subvolume_path(self, subvolume_name):
         return self._fs_cmd("subvolume", "getpath", self.fs.name, subvolume_name).rstrip()
@@ -98,7 +101,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         stat_qos = self.dump_qos()
 
-        self.assertNotEqual(stat_qos, [])
+        self.assertTrue(self.fs.is_mds_qos())
 
     def test_disable_qos(self):
         """
@@ -107,13 +110,15 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_enable", "false"])
 
         stat_qos = self.dump_qos()
+        log.info(stat_qos)
 
-        self.assertEqual(stat_qos, [])
+        self.assertFalse(self.fs.is_mds_qos())
 
     def test_set_default_qos_value(self):
         """
         Enable QoS and set default qos value, and then check the result.
         """
+        log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
         reservation, weight, limit = 200, 200, 200
@@ -123,6 +128,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_weight", str(weight)])
 
         stat_qos = self.dump_qos()
+        log.info(stat_qos)
 
         for info in stat_qos:
             self.assertIn("use_default", info)
@@ -136,6 +142,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         Update qos 3 values using setfattr.
         Check its result via getfattr and dump qos.
         """
+        log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
         reservation, weight, limit = 100, 100, 100
@@ -174,6 +181,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         Update qos 3 values using setfattr.
         Check its result via getfattr and dump qos.
         """
+        log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
         reservation, weight, limit = 100, 100, 100
@@ -209,6 +217,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         Update qos 3 values using setfattr.
         And check it from another mount path.
         """
+        log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
         self.mount_b.umount_wait()
@@ -234,6 +243,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
     def test_qos_throttling_50(self):
         import threading
 
+        log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
         reservation, weight, limit = 50, 50, 50
@@ -262,6 +272,45 @@ class TestMDSDmclockQoS(CephFSTestCase):
         stat_qos = self.dump_qos()
         log.info(stat_qos)
 
+        self.assertGreaterEqual(results[0], 50 / 2 * 0.8)
+        self.assertLessEqual(results[0], 50 / 2 * 1.2)
+
+    def test_qos_throttling_100(self):
+        import threading
+
+        log.info(self.fs.is_mds_qos())
+        self.enable_qos()
+
+        reservation, weight, limit = 100, 100, 100
+
+        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(1))
+
+        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
+        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
+        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+
+        stat_qos = self.dump_qos()
+        log.info(stat_qos)
+
+        threads = []
+        results = [0]
+
+        threads.append(threading.Thread(target=create_dirs, args=(0, self.mount_a.hostfs_mntpt, self.TEST_DIR_COUNT * 2, results)))
+
+        log.info("IO Testing...")
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        stat_qos = self.dump_qos()
+        log.info(stat_qos)
+
+        self.assertGreaterEqual(results[0], 100 / 2 * 0.8)
+        self.assertLessEqual(results[0], 100 / 2 * 1.2)
+
+
     def test_qos_ratio(self):
         """
         Test QoS throttling.
@@ -269,6 +318,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         """
         import threading
 
+        log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
         reservation, weight, limit = 100, 100, 100
