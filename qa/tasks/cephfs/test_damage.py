@@ -27,9 +27,6 @@ log = logging.getLogger(__name__)
 
 
 class TestDamage(CephFSTestCase):
-
-    REQUIRE_MDS_QOS = True
-
     def _simple_workload_write(self):
         self.mount_a.run_shell(["mkdir", "subdir"])
         self.mount_a.write_n_mb("subdir/sixmegs", 6)

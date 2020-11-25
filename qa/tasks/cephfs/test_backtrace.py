@@ -3,9 +3,6 @@ from tasks.cephfs.cephfs_test_case import CephFSTestCase
 
 
 class TestBacktrace(CephFSTestCase):
-
-    REQUIRE_MDS_QOS = True
-
     def test_backtrace(self):
         """
         That the 'parent' and 'layout' xattrs on the head objects of files

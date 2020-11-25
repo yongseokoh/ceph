@@ -12,9 +12,6 @@ ValidationError = namedtuple("ValidationError", ["exception", "backtrace"])
 
 
 class Workload(CephFSTestCase):
-
-    REQUIRE_MDS_QOS = True
-
     def __init__(self, filesystem, mount):
         super().__init__()
         self._mount = mount

@@ -16,9 +16,6 @@ ValidationError = namedtuple("ValidationError", ["exception", "backtrace"])
 
 
 class OverlayWorkload(object):
-
-    REQUIRE_MDS_QOS = True
-
     def __init__(self, orig_fs, recovery_fs, orig_mount, recovery_mount):
         self._orig_fs = orig_fs
         self._recovery_fs = recovery_fs

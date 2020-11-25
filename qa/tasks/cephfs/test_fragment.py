@@ -13,8 +13,6 @@ class TestFragmentation(CephFSTestCase):
     CLIENTS_REQUIRED = 1
     MDSS_REQUIRED = 1
 
-    REQUIRE_MDS_QOS = True
-
     def get_splits(self):
         return self.fs.mds_asok(['perf', 'dump', 'mds'])['mds']['dir_split']
 

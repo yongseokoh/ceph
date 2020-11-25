@@ -5,9 +5,6 @@ from tasks.cephfs.filesystem import ObjectNotFound, ROOT_INO
 
 
 class TestFlush(CephFSTestCase):
-
-    REQUIRE_MDS_QOS = True
-
     def test_flush(self):
         self.mount_a.run_shell(["mkdir", "mydir"])
         self.mount_a.run_shell(["touch", "mydir/alpha"])
