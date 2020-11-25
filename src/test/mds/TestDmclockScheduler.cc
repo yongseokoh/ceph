@@ -53,10 +53,10 @@ TEST(MDSDmclockScheduler, ConfCheck)
 
   MDSDmclockScheduler *scheduler = new MDSDmclockScheduler(mds);
 
-  ASSERT_TRUE(scheduler->get_default_conf().is_enabled()==true);
-  ASSERT_TRUE(scheduler->get_default_conf().get_reservation()==10000);
-  ASSERT_TRUE(scheduler->get_default_conf().get_weight()==10000);
-  ASSERT_TRUE(scheduler->get_default_conf().get_limit()==10000);
+  ASSERT_EQ(scheduler->get_default_conf().is_enabled(), true);
+  ASSERT_EQ(scheduler->get_default_conf().get_reservation(), 10000);
+  ASSERT_EQ(scheduler->get_default_conf().get_weight(), 10000);
+  ASSERT_EQ(scheduler->get_default_conf().get_limit(), 10000);
 
   delete scheduler;
 
@@ -64,7 +64,7 @@ TEST(MDSDmclockScheduler, ConfCheck)
 
   scheduler = new MDSDmclockScheduler(mds);
 
-  ASSERT_TRUE(scheduler->get_default_conf().is_enabled()==false);
+  ASSERT_FALSE(scheduler->get_default_conf().is_enabled());
 
   delete scheduler;
 }
@@ -74,7 +74,7 @@ TEST(MDSDmclockScheduler, GoodBasic)
   MDSDmclockScheduler *scheduler = new MDSDmclockScheduler(mds);
 
   scheduler->enable_qos_feature();
-  ASSERT_TRUE(scheduler->get_default_conf().is_enabled()==true);
+  ASSERT_TRUE(scheduler->get_default_conf().is_enabled());
 
   SessionId sid = "10024";
   VolumeId vid = "/";
@@ -86,11 +86,11 @@ TEST(MDSDmclockScheduler, GoodBasic)
     scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
     scheduler->add_session_to_volume_info(vid, sid);
 
-    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-    ASSERT_TRUE(vi.get_reservation() == reservation);
-    ASSERT_TRUE(vi.get_weight() == weight);
-    ASSERT_TRUE(vi.get_limit() == limit);
-    ASSERT_TRUE(vi.is_use_default() == use_default);
+    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+    ASSERT_EQ(vi.get_reservation(), reservation);
+    ASSERT_EQ(vi.get_weight(), weight);
+    ASSERT_EQ(vi.get_limit(), limit);
+    ASSERT_EQ(vi.is_use_default(), use_default);
   }
 
   {
@@ -99,41 +99,41 @@ TEST(MDSDmclockScheduler, GoodBasic)
 
     scheduler->update_volume_info(vid, reservation, weight, limit, use_default);
 
-    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-    ASSERT_TRUE(vi.get_reservation() == reservation);
-    ASSERT_TRUE(vi.get_weight() == weight);
-    ASSERT_TRUE(vi.get_limit() == limit);
-    ASSERT_TRUE(vi.is_use_default() == use_default);
+    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+    ASSERT_EQ(vi.get_reservation(), reservation);
+    ASSERT_EQ(vi.get_weight(), weight);
+    ASSERT_EQ(vi.get_limit(), limit);
+    ASSERT_EQ(vi.is_use_default(), use_default);
   }
 
   {
     double reservation = 100.0, weight = 200.0, limit = 300.0;
     bool use_default = false;
     scheduler->update_volume_info(vid, reservation, weight, limit, use_default);
-    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-    ASSERT_TRUE(vi.is_use_default() == use_default);
+    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+    ASSERT_FALSE(vi.is_use_default());
   }
 
   {
     vi.set_reservation(1000.0);
-    ASSERT_TRUE(1000.0 == vi.get_reservation());
+    ASSERT_EQ(vi.get_reservation(), 1000.0);
     vi.set_weight(2000.0);
-    ASSERT_TRUE(2000.0 == vi.get_weight());
+    ASSERT_EQ(vi.get_weight(), 2000.0);
     vi.set_limit(3000.0);
-    ASSERT_TRUE(3000.0  == vi.get_limit());
+    ASSERT_EQ( vi.get_limit(), 3000.0);
     vi.set_use_default(true);
-    ASSERT_TRUE(true == vi.is_use_default());
+    ASSERT_TRUE(vi.is_use_default());
   }
 
   scheduler->set_default_volume_info(vid);
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-  ASSERT_TRUE(vi.is_use_default() == true);
+  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+  ASSERT_TRUE(vi.is_use_default());
 
   scheduler->delete_session_from_volume_info(vid, sid);
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==false);
+  ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
 
   scheduler->disable_qos_feature();
-  ASSERT_TRUE(scheduler->get_default_conf().is_enabled()==false);
+  ASSERT_FALSE(scheduler->get_default_conf().is_enabled());
 
   delete scheduler;
 }
@@ -154,12 +154,12 @@ TEST(MDSDmclockScheduler, VolumeSessionInfo)
   scheduler->add_session_to_volume_info(vid, sid);
   scheduler->add_session_to_volume_info(vid, sid);
 
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-  ASSERT_TRUE(vi.get_session_cnt() == 1);
+  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+  ASSERT_EQ(vi.get_session_cnt(), 1);
 
   scheduler->delete_session_from_volume_info(vid, sid);
   scheduler->delete_session_from_volume_info(vid, sid);
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==false);
+  ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
 
   scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
   scheduler->add_session_to_volume_info(vid, "1020");
@@ -170,16 +170,16 @@ TEST(MDSDmclockScheduler, VolumeSessionInfo)
   scheduler->add_session_to_volume_info(vid, "3021");
   scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
   scheduler->add_session_to_volume_info(vid, "9028");
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-  ASSERT_TRUE(vi.get_session_cnt() == 3);
+  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+  ASSERT_EQ(vi.get_session_cnt(), 3);
 
   scheduler->delete_session_from_volume_info(vid, "9028");
   scheduler->delete_session_from_volume_info(vid, "1020");
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-  ASSERT_TRUE(vi.get_session_cnt() == 1);
+  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+  ASSERT_EQ(vi.get_session_cnt(), 1);
 
   scheduler->delete_session_from_volume_info(vid, "3021");
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==false);
+  ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
 
   delete scheduler;
 }
@@ -206,7 +206,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
   /* nullptr session sanity check */
   scheduler->create_qos_info_from_xattr(nullptr);
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == 0);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
 
   VolumeId vid = "/";
   VolumeInfo vi;
@@ -214,13 +214,13 @@ TEST(MDSDmclockScheduler, SessionSanity)
   Session *session = make_session(vid, 10000);
 
   scheduler->create_qos_info_from_xattr(session);
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == 1);
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-  ASSERT_TRUE(vi.get_session_cnt() == 1);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
+  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+  ASSERT_EQ(vi.get_session_cnt(), 1);
 
   scheduler->delete_qos_info_by_session(session);
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == 0);
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==false);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
+  ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
 
   /* duplicate */
   scheduler->delete_qos_info_by_session(session);
@@ -237,19 +237,19 @@ TEST(MDSDmclockScheduler, SessionSanity)
     session_a[i] = make_session(vid, 10000 + i);
     scheduler->create_qos_info_from_xattr(session_a[i]);
   }
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == 1);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
   ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-  ASSERT_TRUE(vi.get_session_cnt() == SESSION_NUM);
+  ASSERT_EQ(vi.get_session_cnt(), SESSION_NUM);
 
   for (int i = 0; i < SESSION_NUM; i++) {
-    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
-    ASSERT_TRUE(vi.get_session_cnt() == (SESSION_NUM - i));
-    ASSERT_TRUE(scheduler->get_volume_info_map().size() == 1);
+    ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
+    ASSERT_EQ(vi.get_session_cnt(), (SESSION_NUM - i));
+    ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
     scheduler->delete_qos_info_by_session(session_a[i]);
   }
 
-  ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==false);
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == 0);
+  ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
 
   for (int i = 0; i < SESSION_NUM; i++) {
     put_session(session_a[i]);
@@ -268,18 +268,18 @@ TEST(MDSDmclockScheduler, SessionSanity)
       session_b[i][j] = make_session(vid_a[i], 10000 + j);
       scheduler->create_qos_info_from_xattr(session_b[i][j]);
     }
-    ASSERT_TRUE(scheduler->copy_volume_info(vid_a[i], vi_a[i])==true);
-    ASSERT_TRUE(vi_a[i].get_session_cnt() == SESSION_NUM);
+    ASSERT_TRUE(scheduler->copy_volume_info(vid_a[i], vi_a[i]));
+    ASSERT_EQ(vi_a[i].get_session_cnt(), SESSION_NUM);
   }
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == VOLUME_NUM);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), VOLUME_NUM);
 
   for (int i = 0; i < VOLUME_NUM; i++) {
     for (int j = 0; j < SESSION_NUM; j++) {
       scheduler->delete_qos_info_by_session(session_b[i][j]);
     }
-    ASSERT_TRUE(scheduler->copy_volume_info(vid_a[i], vi_a[i])==false);
+    ASSERT_FALSE(scheduler->copy_volume_info(vid_a[i], vi_a[i]));
   }
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == 0);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
 
   /* nagative test: delete again */
   for (int i = 0; i < VOLUME_NUM; i++) {
@@ -287,7 +287,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
       scheduler->delete_qos_info_by_session(session_b[i][j]);
     }
   }
-  ASSERT_TRUE(scheduler->get_volume_info_map().size() == 0);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
 
   for (int i = 0; i < VOLUME_NUM; i++) {
     for (int j = 0; j < SESSION_NUM; j++) {
@@ -369,7 +369,7 @@ TEST(MDSDmclockScheduler, IssueClientRequest)
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
 
-  ASSERT_TRUE(request_count==complete_count);
+  ASSERT_EQ(request_count, complete_count);
 }
 
 TEST(MDSDmclockScheduler, CancelClientRequest)
@@ -395,7 +395,7 @@ TEST(MDSDmclockScheduler, CancelClientRequest)
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
 
-  ASSERT_TRUE(request_count==(complete_count));
+  ASSERT_EQ(request_count, complete_count);
 }
 
 TEST(MDSDmclockScheduler, IssueUpdateRequest)
@@ -444,7 +444,7 @@ TEST(MDSDmclockScheduler, IssueUpdateRequest)
 
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
-  ASSERT_TRUE(update_count==(sync_total_count+async_total_count));
+  ASSERT_EQ(update_count, (sync_total_count+async_total_count));
 }
 
 TEST(MDSDmclockScheduler, IssueMixRequest)
@@ -489,5 +489,5 @@ TEST(MDSDmclockScheduler, IssueMixRequest)
 
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
-  ASSERT_TRUE((update_count+complete_count)==sync_total_count);
+  ASSERT_EQ(update_count+complete_count, sync_total_count);
 }
