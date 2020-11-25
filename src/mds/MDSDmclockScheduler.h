@@ -351,10 +351,9 @@ public:
 
   MDSDmclockScheduler(MDSRank *m) :
     MDSDmclockScheduler(m,
-        /* TODO */
-      std::bind(&MDSDmclockScheduler::get_client_info, this, _1),
-      {[]()->bool{ return true;}},
-      std::bind(&MDSDmclockScheduler::submit_request_to_mds, this, _1, _2, _3, _4))
+      Queue::ClientInfoFunc(),
+      Queue::CanHandleRequestFunc(),
+      Queue::HandleRequestFunc())
   {
     // empty
   }
