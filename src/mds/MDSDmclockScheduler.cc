@@ -108,7 +108,9 @@ MDSDmclockScheduler::~MDSDmclockScheduler()
 
 const ClientInfo *MDSDmclockScheduler::get_client_info(const VolumeId &vid)
 {
-  auto vi = get_volume_info(vid);
+  std::lock_guard lock(volume_info_lock);
+
+  auto vi = get_volume_info_ptr(vid);
   const ClientInfo *ci = nullptr;
   if (vi != nullptr) {
     if (vi->is_use_default() == true) {
@@ -127,6 +129,8 @@ const ClientInfo *MDSDmclockScheduler::get_client_info(const VolumeId &vid)
 
 void MDSDmclockScheduler::dump_volume_info(Formatter *f) const
 {
+  std::lock_guard lock(volume_info_lock);
+
   f->open_array_section("volume_infos");
   for (auto it = volume_info_map.begin(); it != volume_info_map.end(); it++) {
     auto vol_info = it->second;
@@ -150,7 +154,7 @@ void MDSDmclockScheduler::dump_volume_info(Formatter *f) const
   f->close_section();
 }
 
-VolumeInfo *MDSDmclockScheduler::get_volume_info(const VolumeId &vid)
+VolumeInfo *MDSDmclockScheduler::get_volume_info_ptr(const VolumeId &vid)
 {
   auto it = volume_info_map.find(vid);
   if (it != volume_info_map.end()) {
@@ -159,27 +163,52 @@ VolumeInfo *MDSDmclockScheduler::get_volume_info(const VolumeId &vid)
   return nullptr;
 }
 
+bool MDSDmclockScheduler::copy_volume_info(const VolumeId &vid, VolumeInfo &vi)
+{
+  std::lock_guard lock(volume_info_lock);
+  auto it = volume_info_map.find(vid);
+  if (it != volume_info_map.end()) {
+    vi = it->second;
+    return true;
+  }
+  return false;
+}
+
+bool MDSDmclockScheduler::check_volume_info_existence(const VolumeId &vid)
+{
+  std::lock_guard lock(volume_info_lock);
+
+  if (get_volume_info_ptr(vid) != nullptr) {
+    return true;
+  }
+  return false;
+}
+
 void MDSDmclockScheduler::increase_inflight_request(const VolumeId &vid)
 {
-  VolumeInfo* vi = get_volume_info(vid);
+  std::lock_guard lock(volume_info_lock);
+  VolumeInfo* vi = get_volume_info_ptr(vid);
   vi->increase_inflight_request();
 }
 
 void MDSDmclockScheduler::decrease_inflight_request(const VolumeId &vid)
 {
-  VolumeInfo* vi = get_volume_info(vid);
+  std::lock_guard lock(volume_info_lock);
+  VolumeInfo* vi = get_volume_info_ptr(vid);
   vi->decrease_inflight_request();
 }
 
 int MDSDmclockScheduler::get_inflight_request(const VolumeId &vid)
 {
-  VolumeInfo* vi = get_volume_info(vid);
+  std::lock_guard lock(volume_info_lock);
+  VolumeInfo* vi = get_volume_info_ptr(vid);
   return vi->get_inflight_request();
 }
 
 void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default)
 {
-  VolumeInfo* vi = get_volume_info(vid);
+  std::lock_guard lock(volume_info_lock);
+  VolumeInfo* vi = get_volume_info_ptr(vid);
 
   dout(0) << "create_volume_info() reservation = " << reservation << " weight " << weight <<
     " limit " << limit << " use_default " << use_default<< dendl;
@@ -196,9 +225,11 @@ void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const double r
 
 void MDSDmclockScheduler::add_session_to_volume_info(const VolumeId &vid, const SessionId &sid)
 {
+  std::lock_guard lock(volume_info_lock);
+
   dout(1) << __func__ << dendl;
 
-  VolumeInfo* vi = get_volume_info(vid);
+  VolumeInfo* vi = get_volume_info_ptr(vid);
   if (vi) {
     vi->add_session(sid);
   }
@@ -206,6 +237,8 @@ void MDSDmclockScheduler::add_session_to_volume_info(const VolumeId &vid, const 
 
 void MDSDmclockScheduler::delete_session_from_volume_info(const VolumeId &vid, const SessionId &sid)
 {
+  std::lock_guard lock(volume_info_lock);
+
   auto it = volume_info_map.find(vid);
   if (it != volume_info_map.end()) {
     auto vi = &it->second;
@@ -221,13 +254,15 @@ void MDSDmclockScheduler::delete_session_from_volume_info(const VolumeId &vid, c
 
 void MDSDmclockScheduler::update_volume_info(const VolumeId &vid, double reservation, double weight, double limit, bool use_default)
 {
+  std::lock_guard lock(volume_info_lock);
+
   dout(0) << "update_volume_info" << 
              " reservation " << reservation <<
              " weight " << weight << 
              " limit " << limit << 
              " use_default " << use_default << dendl;
   
-  VolumeInfo* vi = get_volume_info(vid);
+  VolumeInfo* vi = get_volume_info_ptr(vid);
   if (vi) {
     vi->update_volume_info(reservation, weight, limit, use_default);
     enqueue_update_request(vid);
@@ -259,7 +294,7 @@ void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
 
   dout(0) << "create_qos_info_from_xattr() root = " << vid<<  dendl;
 
-  if (get_volume_info(vid) == nullptr) {
+  if (check_volume_info_existence(vid) == false) {
     CInode *in = read_xattrs(vid);
     auto pip = in->get_projected_inode();
 
@@ -294,7 +329,7 @@ void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid)
 {
   dout(0) << "update_qos_info_from_xattr() root = " << vid <<  dendl;
 
-  if (get_volume_info(vid) == nullptr) {
+  if (check_volume_info_existence(vid) == false) {
     return;
   }
 
@@ -362,8 +397,7 @@ void MDSDmclockScheduler::handle_qos_info_update_message(const cref_t<MDSDmclock
   dout(0) << "handle_qos_info_update_message()" << dendl;
   dout(0) << "receive send_message in " << mds->get_nodeid() << " volume_id " << m->get_volume_id() << dendl;
 
-  VolumeInfo* vi = get_volume_info(m->get_volume_id());
-  if (vi != nullptr) {
+  if (check_volume_info_existence(m->get_volume_id()) == true) {
     dout(0) << "session maintains client info for volume_id = " << m->get_volume_id() << dendl;
     update_qos_info_from_xattr(m->get_volume_id());
   } else {
@@ -527,6 +561,7 @@ void MDSDmclockScheduler::enable_qos_feature()
 
 void MDSDmclockScheduler::cancel_inflight_request()
 {
+  std::lock_guard lock(volume_info_lock);
   std::list<Queue::RequestRef> req_list;
 
   auto accum_f = [&req_list] (Queue::RequestRef&& r)
