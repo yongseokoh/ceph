@@ -2804,7 +2804,7 @@ void MDSRankDispatcher::handle_asok_command(
     damage_table.erase(id);
   } else if (command == "dump qos") {
     std::lock_guard l(mds_lock);
-    mds_dmclock_scheduler->dump_volume_info(f);
+    mds_dmclock_scheduler->dump(f);
   } else {
     r = -ENOSYS;
   }

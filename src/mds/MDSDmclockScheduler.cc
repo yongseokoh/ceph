@@ -127,31 +127,33 @@ const ClientInfo *MDSDmclockScheduler::get_client_info(const VolumeId &vid)
   return ci;
 }
 
-void MDSDmclockScheduler::dump_volume_info(Formatter *f) const
+void MDSDmclockScheduler::dump(Formatter *f) const
 {
-  std::lock_guard lock(volume_info_lock);
+  f->open_array_section("qos_info");
+
+  f->open_object_section("qos_state");
+  f->dump_bool("qos_enabled", default_conf.is_enabled());
+  if (default_conf.is_enabled()) {
+    f->dump_string("state", get_state_str());
+    f->dump_float("default_reservation", default_conf.get_reservation());
+    f->dump_float("default_weight", default_conf.get_weight());
+    f->dump_float("default_limit", default_conf.get_limit());
+    f->dump_int("mds_dmclock_queue_size", get_request_queue_size());
+    f->dump_int("inflight_requests", total_inflight_requests);
+  }
+  f->close_section(); // qos_state
 
   f->open_array_section("volume_infos");
+  std::lock_guard lock(volume_info_lock);
   for (auto it = volume_info_map.begin(); it != volume_info_map.end(); it++) {
     auto vol_info = it->second;
-
     f->open_object_section("volume_info");
-    f->dump_string("volume_id", it->first);
-    f->dump_bool("use_default", vol_info.is_use_default());
-
-    if (vol_info.is_use_default() == true) {
-      f->dump_float("reservation", default_conf.get_reservation());
-      f->dump_float("weight", default_conf.get_weight());
-      f->dump_float("limit", default_conf.get_limit());
-    } else {
-      f->dump_float("reservation", vol_info.get_reservation());
-      f->dump_float("weight", vol_info.get_weight());
-      f->dump_float("limit", vol_info.get_limit());
-    }
-    f->dump_int("session_cnt", vol_info.get_session_cnt());
+    vol_info.dump(f, it->first);
     f->close_section();
   }
-  f->close_section();
+  f->close_section(); // volume_infos
+
+  f->close_section(); // qos_info
 }
 
 VolumeInfo *MDSDmclockScheduler::get_volume_info_ptr(const VolumeId &vid)
@@ -189,6 +191,7 @@ void MDSDmclockScheduler::increase_inflight_request(const VolumeId &vid)
   std::lock_guard lock(volume_info_lock);
   VolumeInfo* vi = get_volume_info_ptr(vid);
   vi->increase_inflight_request();
+  total_inflight_requests++;
 }
 
 void MDSDmclockScheduler::decrease_inflight_request(const VolumeId &vid)
@@ -196,6 +199,7 @@ void MDSDmclockScheduler::decrease_inflight_request(const VolumeId &vid)
   std::lock_guard lock(volume_info_lock);
   VolumeInfo* vi = get_volume_info_ptr(vid);
   vi->decrease_inflight_request();
+  total_inflight_requests--;
 }
 
 int MDSDmclockScheduler::get_inflight_request(const VolumeId &vid)
@@ -417,7 +421,7 @@ void MDSDmclockScheduler::proc_message(const cref_t<Message> &m)
   }
 }
 
-uint32_t MDSDmclockScheduler::get_request_queue_size()
+uint32_t MDSDmclockScheduler::get_request_queue_size() const
 {
   std::unique_lock<std::mutex> lock(queue_mutex);
 
@@ -702,4 +706,20 @@ int MDSDmclockScheduler::mds_is_locked_by_me()
     return mds->mds_lock.is_locked_by_me();
   }
   return 1;
+}
+
+std::string_view MDSDmclockScheduler::get_state_str() const
+{
+  switch(state) {
+    case SchedulerState::INIT:
+      return "INIT";
+    case SchedulerState::RUNNING:
+      return "RUNNING";
+    case SchedulerState::FINISHING:
+      return "FINISHING";
+    case SchedulerState::SHUTDOWN:
+      return "SHUTDOWN";
+    default:
+      return "UNKONWN";
+  }
 }

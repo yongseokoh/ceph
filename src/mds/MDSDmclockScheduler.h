@@ -155,11 +155,14 @@ private:
 
 public:
   explicit VolumeInfo():
-    QoSInfo(0.0, 0.0, 0.0), use_default(true) {};
+    QoSInfo(0.0, 0.0, 0.0), use_default(true), inflight_requests(0)  {};
 
-  int32_t get_session_cnt() { return session_list.size(); };
-  
-  bool is_use_default()
+  int32_t get_session_cnt() const
+  {
+    return session_list.size();
+  }
+
+  bool is_use_default() const
   {
     return use_default;
   }
@@ -189,16 +192,39 @@ public:
     }
   }
 
-  int get_inflight_request() {
+  int get_inflight_request() const
+  {
     return inflight_requests;
   }
 
-  void increase_inflight_request() {
+  void increase_inflight_request()
+  {
     inflight_requests++;
   }
 
-  void decrease_inflight_request() {
+  void decrease_inflight_request()
+  {
     inflight_requests--;
+  }
+
+  void dump(Formatter *f, const std::string &vid) const
+  {
+    f->dump_string("volume_id", vid);
+    f->dump_bool("use_default", is_use_default());
+    if (!is_use_default()) {
+      f->dump_float("reservation", get_reservation());
+      f->dump_float("weight", get_weight());
+      f->dump_float("limit", get_limit());
+    }
+    f->dump_int("inflight_requests", get_inflight_request());
+    f->dump_int("session_cnt", get_session_cnt());
+    {
+      f->open_array_section("session_list");
+      for (auto &it : session_list) {
+        f->dump_string("session_id", it);
+      }
+      f->close_section();
+    }
   }
 };
 
@@ -211,12 +237,12 @@ private:
 public:
   mds_dmclock_conf(): QoSInfo(0.0, 0.0, 0.0), enabled(false){};
 
-  bool get_status()
+  bool get_status() const
   {
     return enabled;
   }
 
-  bool is_enabled()
+  bool is_enabled() const
   {
     return enabled;
   }
@@ -238,8 +264,9 @@ class MDSRank;
 
 class MDSDmclockScheduler {
 private:
-  mds_dmclock_conf default_conf;
   SchedulerState state;
+  mds_dmclock_conf default_conf;
+  int total_inflight_requests;
   MDSRank *mds;
   Queue *dmclock_queue;
   std::map<VolumeId, VolumeInfo> volume_info_map;
@@ -265,7 +292,7 @@ public:
   bool check_volume_info_existence(const VolumeId &vid);
   void delete_session_from_volume_info(const VolumeId &vid, const SessionId &sid);
   void set_default_volume_info(const VolumeId &vid);
-  void dump_volume_info(Formatter *f) const;
+  void dump(Formatter *f) const;
 
   void create_qos_info_from_xattr(Session *session);
   void update_qos_info_from_xattr(const VolumeId &vid);
@@ -299,7 +326,7 @@ public:
   std::deque<std::unique_ptr<Request>> request_queue;
   void enqueue_update_request(const VolumeId& vid);
   void enqueue_update_request(const VolumeId& vid, RequestCB cb_func);
-  uint32_t get_request_queue_size();
+  uint32_t get_request_queue_size() const;
 
   const VolumeId& get_volume_id(Session *session);
   const SessionId get_session_id(Session *session);
@@ -338,6 +365,7 @@ public:
         handle_request_func);
 
     state = SchedulerState::RUNNING;
+    total_inflight_requests = 0;
 
     begin_schedule_thread();
 
@@ -377,6 +405,8 @@ public:
 
   void shutdown();
   friend ostream& operator<<(ostream& os, const VolumeInfo* vi);
+
+  std::string_view get_state_str() const;
 };
 
 #endif // MDS_DMCLOCK_SCHEDULER_H_
