@@ -35,3 +35,4 @@
 ../qa/tasks/cephfs/test_strays.py
 ../qa/tasks/cephfs/test_volume_client.py
 ../qa/tasks/cephfs/test_volumes.py
+../qa/tasks/cephfs/test_mds_dmclock_qos.py

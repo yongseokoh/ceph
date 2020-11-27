@@ -10,3 +10,4 @@
 ../qa/tasks/cephfs/test_readahead.py
 ../qa/tasks/cephfs/test_recovery_pool.py
 ../qa/tasks/cephfs/test_scrub.py
+../qa/tasks/cephfs/test_mds_dmclock_qos.py
