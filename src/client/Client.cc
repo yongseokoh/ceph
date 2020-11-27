@@ -12372,7 +12372,7 @@ size_t Client::_vxattrcb_mirror_info(Inode *in, char *val, size_t size)
   flags: 0,                                                     \
 }
 
-#define XATTR_DMCLOCK_FIELD(_type, _name)		                \
+#define XATTR_DMCLOCK_FIELD(_type, _name)		        \
 {								\
   name: CEPH_XATTR_NAME(_type, _name),			        \
   getxattr_cb: &Client::_vxattrcb_ ## _type ## _ ## _name,	\
