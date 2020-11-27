@@ -5785,7 +5785,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
     auto pi = cur->project_inode(mdr);
     cur->setxattr_ephemeral_dist(val);
     pip = pi.inode.get();
-  } else if (name.find("ceph.dmclock") == 0) {
+  } else if (name.compare(0, 12, "ceph.dmclock") == 0) {
 
     if (!cur->is_dir()) {
       respond_to_request(mdr, -EINVAL);
@@ -5805,7 +5805,6 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
 
     if (pos != std::string::npos) {
 
-      const string type = name.substr(pos + 4);
       double reservation, weight, limit;
       auto dmclock = mds->mds_dmclock_scheduler;
 
@@ -5816,17 +5815,17 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
 	cur->make_path_string(path, true);
       }
 
-      if (type == "reservation") {
+      if (name == "ceph.dmclock.mds_reservation"sv) {
 	pi.inode->dmclock_info.mds_reservation = value_;
 	reservation = value_;
 	weight = pi.inode->dmclock_info.mds_weight;
 	limit = pi.inode->dmclock_info.mds_limit;
-      } else if (type == "weight") {
+      } else if (name == "ceph.dmclock.mds_weight"sv) {
 	pi.inode->dmclock_info.mds_weight = value_;
 	reservation = pi.inode->dmclock_info.mds_reservation;
 	weight = value_;
 	limit = pi.inode->dmclock_info.mds_limit;
-      } else if (type == "limit") {
+      } else if (name == "ceph.dmclock.mds_limit"sv) {
 	pi.inode->dmclock_info.mds_limit = value_;
 	reservation = pi.inode->dmclock_info.mds_reservation;
 	weight = pi.inode->dmclock_info.mds_weight;
