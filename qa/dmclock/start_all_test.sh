@@ -21,7 +21,7 @@ function run_test() {
 
         ./start_qos_enabled.sh $2
 
-        python ../qa/tasks/vstart_runner.py tasks.cephfs.${filename}
+        python ../qa/tasks/vstart_runner.py tasks.cephfs.${filename} --run-all-tests
 
         mv vstart_runner.log ${VSTART_LOG_PATH}/${filename}.log
 
