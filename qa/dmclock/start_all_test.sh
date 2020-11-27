@@ -36,7 +36,15 @@ function run_test() {
     done
 }
 
-TEST_FILE=vstart_passed_test.txt
+if [[ "$VIRTUAL_ENV" != "" ]]; then
+    if [[ "$1" != "" ]]; then
+        run_test $1 true qos-on
+        run_test $1 false qos-off
+        #sudo shutdown -h now
+    else
+        echo invalid test file $1
+    fi
+else
+    echo "Please, enable virtualenv!!"
+fi
 
-run_test $TEST_FILE true qos-on
-run_test $TEST_FILE false qos-off
