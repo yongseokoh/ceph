@@ -24,11 +24,8 @@
 const VolumeId &MDSDmclockScheduler::get_volume_id(Session *session)
 {
   ceph_assert(session != nullptr);
-
   auto client_root_entry = session->info.client_metadata.find("root");
-
   ceph_assert(client_root_entry != session->info.client_metadata.end());
-
   return client_root_entry->second;
 }
 
@@ -52,9 +49,8 @@ void MDSDmclockScheduler::handle_mds_request(const MDSReqRef &mds_req)
 {
   ceph_assert(mds_is_locked_by_me());
 
-  auto volume_id = get_volume_id(mds->get_session(mds_req));
-
-  if (mds->mds_dmclock_scheduler->default_conf.is_enabled() == true) {
+  if (mds->mds_dmclock_scheduler->default_conf.is_enabled() == true && mds_req->get_orig_source().is_client()) {
+    auto volume_id = get_volume_id(mds->get_session(mds_req));
     dout(0) << "add request to add thread " << volume_id << dendl;
     enqueue_client_request<MDSReqRef>(mds_req, volume_id);
   } else {
