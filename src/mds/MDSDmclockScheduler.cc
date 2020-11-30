@@ -511,7 +511,7 @@ CInode *MDSDmclockScheduler::read_xattrs(const VolumeId vid)
   CInode *in;
 
   filepath path_(vid.c_str());
-  auto qos_msg = make_message<MDSDmclockQoS>(vid);
+  auto qos_msg = make_message<MDSDmclockQoS>();
   CF_MDS_RetryMessageFactory cf(mds, qos_msg);
 
   if (vid != ROOT_VOLUME_ID) {
@@ -523,6 +523,7 @@ CInode *MDSDmclockScheduler::read_xattrs(const VolumeId vid)
   else { // vid == "/"
    // TODO
     if (mds->get_nodeid() != mds->mdsmap->get_root()) {
+      dout(0) << "This mds is not root, send discover_base_ino to mds " << mds->mdsmap->get_root() << dendl;
       mds->mdcache->discover_base_ino(MDS_INO_ROOT, cf.build(), mds->mdsmap->get_root());
     }
   }
