@@ -374,8 +374,11 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         reservation, weight, limit = 25, 50, 50
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(0))  # pinning to QoS enabled MDS
-        self.mount_a.setfattr(self.mount_b.hostfs_mntpt, "ceph.dir.pin", str(1))  # pinning to QoS disabled MDS
+        for rank in self.fs.get_ranks():
+            if rank['name'] == 'a':
+                self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(rank['rank']))
+            elif rank['name'] == 'b':
+                self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dir.pin", str(rank['rank']))
 
         self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_reservation", str(reservation)], mds_id='a')
         self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_limit", str(limit)], mds_id='a')
@@ -413,16 +416,12 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         self.disable_qos()
 
-        for id in self.fs.mds_ids:  # turn on QoS on the even numbered mdss
-            print(id)
-            if (ord(id) - ord('a')) % 2 == 0:
-                self.enable_qos(id)
-                self.assertTrue(self.fs.is_mds_qos(id=id))
-            else:
-                self.assertFalse(self.fs.is_mds_qos(id=id))
+        for rank in self.fs.get_ranks():
+            if rank['rank'] == 0:
+                self.enable_qos(rank['name'])
 
         self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(0))  # pinning to QoS enabled MDS
-        self.mount_a.setfattr(self.mount_b.hostfs_mntpt, "ceph.dir.pin", str(1))  # pinning to QoS disabled MDS
+        self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dir.pin", str(1))  # pinning to QoS disabled MDS
 
         reservation, weight, limit = 25, 50, 50
 
