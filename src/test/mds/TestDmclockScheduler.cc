@@ -224,7 +224,21 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
   /* duplicate */
   scheduler->delete_qos_info_by_session(session);
+  put_session(session);
 
+  VolumeId mount_root_path = "/volumes/_nogroup/4c55ad20-9c44-4a5e-9233-8ac64340b98c/subdir";
+  VolumeId subvol_root_path = scheduler->convert_subvol_root(mount_root_path);
+  scheduler->create_volume_info(subvol_root_path, 100.0, 300.0, 400.0, false);
+  session = make_session(mount_root_path, 10000);
+
+  scheduler->create_qos_info_from_xattr(session);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
+  ASSERT_TRUE(scheduler->copy_volume_info(subvol_root_path, vi));
+  ASSERT_EQ(vi.get_session_cnt(), 1);
+
+  scheduler->delete_qos_info_by_session(session);
+  ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
+  ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
   put_session(session);
 
   #define SESSION_NUM 10
