@@ -32,12 +32,23 @@ ostream& operator<<(ostream& os, VolumeInfo* vi)
   return os;
 }
 
-const VolumeId &MDSDmclockScheduler::get_volume_id(Session *session)
+const VolumeId MDSDmclockScheduler::convert_subvol_root(const VolumeId &volume_id)
+{
+  filepath subvol_root_path(volume_id);
+
+  if (subvol_root_path.depth() > SUBVOL_ROOT_DEPTH) {
+    return "/" + subvol_root_path.prefixpath(SUBVOL_ROOT_DEPTH).get_path();
+  }
+
+  return volume_id;
+}
+
+const VolumeId MDSDmclockScheduler::get_volume_id(Session *session)
 {
   ceph_assert(session != nullptr);
   auto client_root_entry = session->info.client_metadata.find("root");
   ceph_assert(client_root_entry != session->info.client_metadata.end());
-  return client_root_entry->second;
+  return convert_subvol_root(client_root_entry->second);
 }
 
 const VolumeId MDSDmclockScheduler::get_session_id(Session *session)
@@ -297,7 +308,7 @@ void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
   VolumeId vid = get_volume_id(session);
   SessionId sid = get_session_id(session);
 
-  dout(0) << "create_qos_info_from_xattr() root = " << vid<<  dendl;
+  dout(0) << "create_qos_info_from_xattr() root = " << vid <<  dendl;
 
   if (check_volume_info_existence(vid) == false) {
     CInode *in = read_xattrs(vid);
@@ -388,7 +399,7 @@ void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& vid)
     if (mds->get_nodeid() == it) {
       continue;
     }
-    auto qos_msg = make_message<MDSDmclockQoS>(vid);
+    auto qos_msg = make_message<MDSDmclockQoS>(convert_subvol_root(vid));
 
     mds->send_message_mds(qos_msg, it);
     dout(0) << "send message to MDS " << it << " vid: " << vid << dendl;
@@ -516,7 +527,6 @@ CInode *MDSDmclockScheduler::read_xattrs(const VolumeId vid)
 
   if (vid != ROOT_VOLUME_ID) {
     CInode *cur = mds->mdcache->get_inode(path_.get_ino());  //get base_ino
-    
     mds->mdcache->discover_path(cur, CEPH_NOSNAP, path_, NULL, false);	// must discover
     if (mds->logger) mds->logger->inc(l_mds_traverse_discover);
   }
