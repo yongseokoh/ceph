@@ -171,11 +171,11 @@ public:
     use_default = _use_default;
   }
 
-  void update_volume_info(const double reservation, const double weight, const double limit, const bool use_default)
+  void update_volume_info(const ClientInfo& client_info, const bool use_default)
   {
-    set_reservation(reservation);
-    set_weight(weight);
-    set_limit(limit);
+    set_reservation(client_info.reservation);
+    set_weight(client_info.weight);
+    set_limit(client_info.limit);
     set_use_default(use_default);
   }
 
@@ -285,9 +285,9 @@ public:
   }
 
   /* volume QoS info management */
-  void create_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default);
+  void create_volume_info(const VolumeId &vid, const ClientInfo &client_info, const bool use_default);
   void add_session_to_volume_info(const VolumeId &vid, const SessionId &sid);
-  void update_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default);
+  void update_volume_info(const VolumeId &vid, const ClientInfo& client_info, const bool use_default);
   VolumeInfo *get_volume_info_ptr(const VolumeId &vid);
   bool copy_volume_info(const VolumeId &vid, VolumeInfo &vi);
   bool check_volume_info_existence(const VolumeId &vid);
