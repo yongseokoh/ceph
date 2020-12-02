@@ -63,7 +63,6 @@
 #include "common/config.h"
 
 #include "MDSDmclockScheduler.h"
-#include "dmclock/src/dmclock_recs.h"
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mds
@@ -5474,6 +5473,36 @@ int Server::parse_quota_vxattr(string name, string value, quota_info_t *quota)
   return 0;
 }
 
+int Server::parse_qos_vxattr(string name, string value, dmclock_info_t *info)
+{
+  dout(20) << "parse_qos_vxattr called name: " << name << ", value: " << value << dendl;
+  double value_;
+
+  try {
+    value_ = boost::lexical_cast<double>(value);
+  } catch (boost::bad_lexical_cast const&) {
+    dout(10) << "bad ceph.dmclock vxattr value, unable to cast double for " << name << dendl;
+    return -EINVAL;
+  }
+
+  if (value_ < 0) {
+    return -EINVAL;
+  }
+
+  if (name == "ceph.dmclock.mds_reservation"sv) {
+    info->mds_reservation = value_;
+  } else if (name == "ceph.dmclock.mds_weight"sv) {
+    info->mds_weight = value_;
+  } else if (name == "ceph.dmclock.mds_limit"sv) {
+    info->mds_limit = value_;
+  } else {
+    return -EINVAL;
+  }
+
+  dout(20) << "parse_qos_vxattr success" << dendl;
+  return 0;
+}
+
 void Server::create_quota_realm(CInode *in)
 {
   dout(10) << __func__ << " " << *in << dendl;
@@ -5775,68 +5804,46 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
       return;
     }
 
-    double value_;
-    try {
-      value_ = boost::lexical_cast<double>(value);
-    } catch (boost::bad_lexical_cast const&) {
-      dout(10) << "bad ceph.dmclock vxattr value, unable to cast int for " << name << dendl;
-      respond_to_request(mdr, -EINVAL);
-    }
-
     SnapRealm *realm = cur->find_snaprealm();
-    if (value_) {
-      inodeno_t subvol_ino = realm->get_subvolume_ino();
-      if (subvol_ino != cur->ino()) {
-        dout(10) << "bad subvolume path " << req->get_filepath() << " for dmclock" << dendl;
-        respond_to_request(mdr, -EINVAL);
-        return;
-      }
+    inodeno_t subvol_ino = realm->get_subvolume_ino();
+    if (subvol_ino != cur->ino()) {
+      dout(10) << "bad subvolume path " << req->get_filepath() << " for dmclock" << dendl;
+      respond_to_request(mdr, -EINVAL);
+      return;
     }
 
-    size_t pos = name.find("mds_");
-    auto pi = cur->project_inode(mdr);
+    if (name.find("mds_") != std::string::npos) {
 
-    if (pos != std::string::npos) {
-
-      double reservation, weight, limit;
-      auto dmclock = mds->mds_dmclock_scheduler;
+      dmclock_info_t new_info = cur->get_projected_inode()->dmclock_info;
 
       string path; 
-      if (cur->is_root()) {
-	path = "/";
-      } else {
-	cur->make_path_string(path, true);
+      cur->make_path_string(path, true);
+
+      int r = parse_qos_vxattr(name, value, &new_info);
+      if (r < 0) {
+	respond_to_request(mdr, r);
+        return;
       }
 
-      if (name == "ceph.dmclock.mds_reservation"sv) {
-	pi.inode->dmclock_info.mds_reservation = value_;
-	reservation = value_;
-	weight = pi.inode->dmclock_info.mds_weight;
-	limit = pi.inode->dmclock_info.mds_limit;
-      } else if (name == "ceph.dmclock.mds_weight"sv) {
-	pi.inode->dmclock_info.mds_weight = value_;
-	reservation = pi.inode->dmclock_info.mds_reservation;
-	weight = value_;
-	limit = pi.inode->dmclock_info.mds_limit;
-      } else if (name == "ceph.dmclock.mds_limit"sv) {
-	pi.inode->dmclock_info.mds_limit = value_;
-	reservation = pi.inode->dmclock_info.mds_reservation;
-	weight = pi.inode->dmclock_info.mds_weight;
-	limit = value_;
-      } else {
-	respond_to_request(mdr, -EINVAL);
-	return;
+      if (new_info == cur->get_projected_inode()->dmclock_info) {
+	respond_to_request(mdr, 0);
+        return;
       }
-      
+
+      auto pi = cur->project_inode(mdr);
+      pi.inode->dmclock_info = new_info;
+
       // Update dmclock's client_info_map
-      update_dmclock = (reservation > 0.0 && weight > 0.0 && limit > 0.0);
+      update_dmclock = new_info.is_valid();
       if (update_dmclock) {
-        dmclock->update_volume_info(path, reservation, weight, limit, false);
+        // TODO: Update update_volume_info to use dmclock_info_t
+        mds->mds_dmclock_scheduler->update_volume_info(path, new_info.mds_reservation, new_info.mds_weight, new_info.mds_limit, false);
       }
+
+      mdr->no_early_reply = true;
+      pip = pi.inode.get();
     }
 
-    mdr->no_early_reply = true;
-    pip = pi.inode.get();
   } else {
     dout(10) << " unknown vxattr " << name << dendl;
     respond_to_request(mdr, -EINVAL);
