@@ -5837,7 +5837,8 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
       update_dmclock = new_info.is_valid();
       if (update_dmclock) {
         // TODO: Update update_volume_info to use dmclock_info_t
-        mds->mds_dmclock_scheduler->update_volume_info(path, new_info.mds_reservation, new_info.mds_weight, new_info.mds_limit, false);
+        ClientInfo client_info(new_info.mds_reservation, new_info.mds_weight, new_info.mds_limit);
+        mds->mds_dmclock_scheduler->update_volume_info(path, client_info, false);
       }
 
       mdr->no_early_reply = true;
