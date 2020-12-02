@@ -80,36 +80,36 @@ TEST(MDSDmclockScheduler, GoodBasic)
   VolumeId vid = "/";
   VolumeInfo vi;
   {
-    double reservation = 10.0, weight = 20.0, limit = 30.0;
+    ClientInfo client_info(10.0, 20.0, 30.0);
     bool use_default = false;
 
-    scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+    scheduler->create_volume_info(vid, client_info, use_default);
     scheduler->add_session_to_volume_info(vid, sid);
 
     ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
-    ASSERT_EQ(vi.get_reservation(), reservation);
-    ASSERT_EQ(vi.get_weight(), weight);
-    ASSERT_EQ(vi.get_limit(), limit);
+    ASSERT_EQ(vi.get_reservation(), client_info.reservation);
+    ASSERT_EQ(vi.get_weight(), client_info.weight);
+    ASSERT_EQ(vi.get_limit(), client_info.limit);
     ASSERT_EQ(vi.is_use_default(), use_default);
   }
 
   {
-    double reservation = 100.0, weight = 200.0, limit = 300.0;
+    ClientInfo client_info(100.0, 200.0, 300.0);
     bool use_default = true;
 
-    scheduler->update_volume_info(vid, reservation, weight, limit, use_default);
+    scheduler->update_volume_info(vid, client_info, use_default);
 
     ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
-    ASSERT_EQ(vi.get_reservation(), reservation);
-    ASSERT_EQ(vi.get_weight(), weight);
-    ASSERT_EQ(vi.get_limit(), limit);
+    ASSERT_EQ(vi.get_reservation(), client_info.reservation);
+    ASSERT_EQ(vi.get_weight(), client_info.weight);
+    ASSERT_EQ(vi.get_limit(), client_info.limit);
     ASSERT_EQ(vi.is_use_default(), use_default);
   }
 
   {
-    double reservation = 100.0, weight = 200.0, limit = 300.0;
+    ClientInfo client_info(100.0, 200.0, 300.0);
     bool use_default = false;
-    scheduler->update_volume_info(vid, reservation, weight, limit, use_default);
+    scheduler->update_volume_info(vid, client_info, use_default);
     ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
     ASSERT_FALSE(vi.is_use_default());
   }
@@ -147,10 +147,10 @@ TEST(MDSDmclockScheduler, VolumeSessionInfo)
   VolumeId vid = "/";
   VolumeInfo vi;
 
-  double reservation = 10.0, weight = 20.0, limit = 30.0;
+  ClientInfo client_info(10.0, 20.0, 30.0);
   bool use_default = false;
 
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, sid);
   scheduler->add_session_to_volume_info(vid, sid);
 
@@ -161,14 +161,14 @@ TEST(MDSDmclockScheduler, VolumeSessionInfo)
   scheduler->delete_session_from_volume_info(vid, sid);
   ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
 
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, "1020");
   scheduler->add_session_to_volume_info(vid, "1020");
   scheduler->add_session_to_volume_info(vid, "1020");
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, "3021");
   scheduler->add_session_to_volume_info(vid, "3021");
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, "9028");
   ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
   ASSERT_EQ(vi.get_session_cnt(), 3);
@@ -210,7 +210,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
   VolumeId vid = "/";
   VolumeInfo vi;
-  scheduler->create_volume_info(vid, 100.0, 300.0, 400.0, false);
+  scheduler->create_volume_info(vid, ClientInfo(100.0, 300.0, 400.0), false);
   Session *session = make_session(vid, 10000);
 
   scheduler->create_qos_info_from_xattr(session);
@@ -228,7 +228,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
   VolumeId mount_root_path = "/volumes/_nogroup/4c55ad20-9c44-4a5e-9233-8ac64340b98c/subdir";
   VolumeId subvol_root_path = scheduler->convert_subvol_root(mount_root_path);
-  scheduler->create_volume_info(subvol_root_path, 100.0, 300.0, 400.0, false);
+  scheduler->create_volume_info(subvol_root_path, ClientInfo(100.0, 300.0, 400.0), false);
   session = make_session(mount_root_path, 10000);
 
   scheduler->create_qos_info_from_xattr(session);
@@ -245,7 +245,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
   Session *session_a[SESSION_NUM];
 
   vid = "/volumes/_nogroup/4c55ad20-9c44-4a5e-9233-8ac64340b98c";
-  scheduler->create_volume_info(vid, 100.0, 300.0, 400.0, false);
+  scheduler->create_volume_info(vid, ClientInfo(100.0, 300.0, 400.0), false);
 
   for (int i = 0; i < SESSION_NUM; i++) {
     session_a[i] = make_session(vid, 10000 + i);
@@ -276,7 +276,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
   for (int i = 0; i < VOLUME_NUM; i++) {
     vid_a[i]  = "/volumes/_nogroup/4c55ad20-9c44-4a5e-9233-8ac64340b98" + i;
-    scheduler->create_volume_info(vid_a[i], 100.0, 300.0, 400.0, false);
+    scheduler->create_volume_info(vid_a[i], ClientInfo(100.0, 300.0, 400.0), false);
 
     for (int j = 0; j < SESSION_NUM; j++) {
       session_b[i][j] = make_session(vid_a[i], 10000 + j);
@@ -346,11 +346,9 @@ TEST(MDSDmclockScheduler, IssueClientRequest)
 
   SessionId sid = "323400";
   VolumeId vid = "/";
-  double reservation = 10.0;
-  double weight = 20.0;
-  double limit = 30.0;
+  ClientInfo client_info(10.0, 20.0, 30.0);
   bool use_default = false;
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, sid);
 
   for (int i = 0; i < 20; i++) {
@@ -393,11 +391,9 @@ TEST(MDSDmclockScheduler, CancelClientRequest)
 
   SessionId sid = "23423";
   VolumeId vid = "/";
-  double reservation = 10.0;
-  double weight = 20.0;
-  double limit = 30.0;
   bool use_default = false;
-  scheduler->create_volume_info(vid, reservation, weight, limit, use_default);
+  ClientInfo client_info(10.0, 20.0, 30.0);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, sid);
 
   for (int i = 0; i < 1000; i++) {
@@ -420,11 +416,9 @@ TEST(MDSDmclockScheduler, IssueUpdateRequest)
 
   SessionId sid = "323423";
   VolumeId vid = "/";
-  double reservation = 100.0;
-  double weight = 200.0;
-  double limit = 300.0;
+  ClientInfo client_info(100.0, 200.0, 300.0);
   bool use_default = false;
-  scheduler->create_volume_info(vid,reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, sid);
 
   std::mutex m;
@@ -439,20 +433,22 @@ TEST(MDSDmclockScheduler, IssueUpdateRequest)
 
   int sync_total_count = 100;
   for (int i = 0; i < sync_total_count; i++) {
-    reservation = (std::rand() % 1000) + 1;
-    weight = (std::rand() % 1000) + 1;
-    limit = (std::rand() % 1000) + 1;
-    scheduler->update_volume_info(vid, reservation, weight, limit, use_default);
+    double reservation = (std::rand() % 1000) + 1;
+    double weight = (std::rand() % 1000) + 1;
+    double limit = (std::rand() % 1000) + 1;
+    client_info.update(reservation, weight, limit);
+    scheduler->update_volume_info(vid, client_info, use_default);
     scheduler->enqueue_update_request(vid, cb_func);
     cv.wait(lk, []{return true;});
   }
 
   int async_total_count = 100;
   for (int i = 0; i < async_total_count; i++) {
-    reservation = (std::rand() % 1000) + 1;
-    weight = (std::rand() % 1000) + 1;
-    limit = (std::rand() % 1000) + 1;
-    scheduler->update_volume_info(vid, reservation, weight, limit, use_default);
+    double reservation = (std::rand() % 1000) + 1;
+    double weight = (std::rand() % 1000) + 1;
+    double limit = (std::rand() % 1000) + 1;
+    client_info.update(reservation, weight, limit);
+    scheduler->update_volume_info(vid, client_info, use_default);
     scheduler->enqueue_update_request(vid, cb_func);
   }
 
@@ -469,11 +465,9 @@ TEST(MDSDmclockScheduler, IssueMixRequest)
 
   SessionId sid = "33343";
   VolumeId vid = "/";
-  double reservation = 100.0;
-  double weight = 200.0;
-  double limit = 300.0;
+  ClientInfo client_info(100.0, 200.0, 300.0);
   bool use_default = false;
-  scheduler->create_volume_info(vid,reservation, weight, limit, use_default);
+  scheduler->create_volume_info(vid, client_info, use_default);
   scheduler->add_session_to_volume_info(vid, sid);
 
   std::mutex m;
@@ -489,10 +483,11 @@ TEST(MDSDmclockScheduler, IssueMixRequest)
   int sync_total_count = 100;
   for (int i = 0; i < sync_total_count; i++) {
     if (i % 2 == 0) {
-      reservation = (std::rand() % 1000) + 1;
-      weight = (std::rand() % 1000) + 1;
-      limit = (std::rand() % 1000) + 1;
-      scheduler->update_volume_info(vid, reservation, weight, limit, use_default);
+      double reservation = (std::rand() % 1000) + 1;
+      double weight = (std::rand() % 1000) + 1;
+      double limit = (std::rand() % 1000) + 1;
+      client_info.update(reservation, weight, limit);
+      scheduler->update_volume_info(vid, client_info, use_default);
       scheduler->enqueue_update_request(vid, cb_func);
       cv.wait(lk, []{return true;});
     } else {
