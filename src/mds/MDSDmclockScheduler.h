@@ -271,6 +271,7 @@ private:
   Queue *dmclock_queue;
   std::map<VolumeId, VolumeInfo> volume_info_map;
   mutable std::mutex volume_info_lock;
+  static constexpr uint32_t SUBVOL_ROOT_DEPTH = 3;
 
 public:
 
@@ -328,8 +329,9 @@ public:
   void enqueue_update_request(const VolumeId& vid, RequestCB cb_func);
   uint32_t get_request_queue_size() const;
 
-  const VolumeId& get_volume_id(Session *session);
+  const VolumeId get_volume_id(Session *session);
   const SessionId get_session_id(Session *session);
+  const VolumeId convert_subvol_root(const VolumeId& volume_id);
 
   using RejectThreshold = Time;
   using AtLimitParam = boost::variant<AtLimit, RejectThreshold>;

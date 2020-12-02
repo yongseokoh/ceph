@@ -5770,7 +5770,6 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
     cur->setxattr_ephemeral_dist(val);
     pip = pi.inode.get();
   } else if (name.compare(0, 12, "ceph.dmclock") == 0) {
-
     if (!cur->is_dir()) {
       respond_to_request(mdr, -EINVAL);
       return;
@@ -5782,6 +5781,16 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
     } catch (boost::bad_lexical_cast const&) {
       dout(10) << "bad ceph.dmclock vxattr value, unable to cast int for " << name << dendl;
       respond_to_request(mdr, -EINVAL);
+    }
+
+    SnapRealm *realm = cur->find_snaprealm();
+    if (value_) {
+      inodeno_t subvol_ino = realm->get_subvolume_ino();
+      if (subvol_ino != cur->ino()) {
+        dout(10) << "bad subvolume path " << req->get_filepath() << " for dmclock" << dendl;
+        respond_to_request(mdr, -EINVAL);
+        return;
+      }
     }
 
     size_t pos = name.find("mds_");
