@@ -10852,10 +10852,10 @@ void MDCache::decode_replica_inode(CInode *&in, bufferlist::const_iterator& p, C
     } else {
       in->make_path_string(path, true);
     }
-    mds->mds_dmclock_scheduler->update_volume_info(path, 
-                                                   dmclock_info.mds_reservation,
-                                                   dmclock_info.mds_weight,
-                                                   dmclock_info.mds_limit, false);
+
+    ClientInfo client_info(dmclock_info.mds_reservation, dmclock_info.mds_weight, dmclock_info.mds_limit);
+
+    mds->mds_dmclock_scheduler->update_volume_info(path, client_info, false);
   }
 }
 
