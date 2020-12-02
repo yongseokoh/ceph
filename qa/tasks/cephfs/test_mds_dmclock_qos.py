@@ -1,7 +1,8 @@
 from tasks.cephfs.cephfs_test_case import CephFSTestCase
 from teuthology.exceptions import CommandFailedError
-
+from pathlib import Path
 import logging
+import time
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +29,13 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         # create subvolumes
         for subv_ in self.subvolumes:
-            self._fs_cmd("subvolume", "create", self.fs.name, subv_)
+            for retry in range(5):
+                try:
+                    time.sleep(1)
+                    self._fs_cmd("subvolume", "create", self.fs.name, subv_)
+                    break
+                except CommandFailedError:
+                    log.info('create subvolume command failed.')
 
         if self.mount_a.mounted:
             self.mount_a.umount_wait()
@@ -96,6 +103,31 @@ class TestMDSDmclockQoS(CephFSTestCase):
                 return False
         return True
 
+    def get_subvolume_root(self, mount):
+        if mount == self.mount_a:
+            return Path(self.get_subvolume_path(self.subvolumes[0])).parent
+
+        return Path(self.get_subvolume_path(self.subvolumes[1])).parent
+
+    def remount_subvolume_xattr_root(self, mount, mntpt):
+        mount.umount_wait()
+        mount.mount(cephfs_mntpt=str(mntpt))
+
+    def remount_subvolume_path_root(self, mount):
+        mount.umount_wait()
+        if mount == self.mount_a:
+            mount.mount(cephfs_mntpt=self.get_subvolume_path(self.subvolumes[0]))
+        else:
+            mount.mount(cephfs_mntpt=self.get_subvolume_path(self.subvolumes[1]))
+
+    def set_qos_xattr(self, mount, reservation, limit, weight):
+        from os import getuid, getgid
+        mount.run_shell(['sudo', 'chown', "{0}:{1}".format(getuid(), getgid()), mount.hostfs_mntpt])
+
+        mount.setfattr(mount.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
+        mount.setfattr(mount.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
+        mount.setfattr(mount.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+
     def dump_qos(self, id=None, ignore=["session_cnt", "session_list", "inflight_requests"]):
         """
         Get dump qos from all active mds, and then compare the result for each voluem_id.
@@ -157,20 +189,20 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_limit", str(limit)])
         self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_weight", str(weight)])
 
-        stat_qos = self.dump_qos()
-        log.info(stat_qos)
+        for id in self.fs.mds_ids:
+            stat_qos = self.dump_qos(id)
+            log.info(stat_qos[0])
 
-        for info in stat_qos:
-            self.assertIn("use_default", info)
-            if info["use_default"]:
-                self.assertEqual(info["reservation"], reservation)
-                self.assertEqual(info["limit"], limit)
-                self.assertEqual(info["weight"], weight)
+            self.assertIn("qos_enabled", stat_qos[0])
+            if stat_qos[0]["qos_enabled"]:
+                self.assertEqual(stat_qos[0]["default_reservation"], reservation)
+                self.assertEqual(stat_qos[0]["default_limit"], limit)
+                self.assertEqual(stat_qos[0]["default_weight"], weight)
 
     def test_update_qos_value_root_volume(self):
         """
-        Update qos 3 values using setfattr.
-        Check its result via getfattr and dump qos.
+        Update qos 3 values to "/" using setfattr.
+        Check its result via getfattr
         """
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
@@ -180,31 +212,17 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.mount_a.umount_wait()
         self.mount_a.mount(cephfs_mntpt="/")
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
 
-        # check updated vxattr using getfattr
-        self.assertEqual(
-                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation"))),
-                reservation)
-        self.assertEqual(
-                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight"))),
-                weight)
-        self.assertEqual(
-                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))),
-                limit)
-
-        stat_qos = self.dump_qos()
-        log.info(stat_qos)
-
-        # check updated dmclock info using dump qos
-        for info in stat_qos:
-            self.assertIn("volume_id", info)
-            if info["volume_id"] == self.get_subvolume_path(self.subvolumes[0]):
-                self.assertEqual(info["reservation"], reservation)
-                self.assertEqual(info["limit"], limit)
-                self.assertEqual(info["weight"], weight)
+        # check whether values are none
+        self.assertIsNone(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation"))
+        self.assertIsNone(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))
+        self.assertIsNone(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight"))
 
     def test_update_qos_value_subvolume(self):
         """
@@ -214,11 +232,10 @@ class TestMDSDmclockQoS(CephFSTestCase):
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
-        reservation, weight, limit = 100, 100, 100
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+        reservation, weight, limit = 100, 100, 100
+        self.set_qos_xattr(self.mount_a, reservation, weight, limit)
 
         # check updated vxattr using getfattr
         self.assertEqual(
@@ -237,7 +254,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         # check updated dmclock info using dump qos
         for info in stat_qos:
             self.assertIn("volume_id", info)
-            if info["volume_id"] == self.get_subvolume_path(self.subvolumes[0]):
+            if info["volume_id"] == str(self.get_subvolume_root(self.mount_a)):
                 self.assertEqual(info["reservation"], reservation)
                 self.assertEqual(info["limit"], limit)
                 self.assertEqual(info["weight"], weight)
@@ -258,32 +275,19 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         reservation, weight, limit = 100, 100, 100
 
-        self.mount_a.setfattr(test_dir, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(test_dir, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(test_dir, "ceph.dmclock.mds_weight", str(weight))
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(test_dir, "ceph.dmclock.mds_reservation", str(reservation))
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(test_dir, "ceph.dmclock.mds_limit", str(limit))
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(test_dir, "ceph.dmclock.mds_weight", str(weight))
 
         # check updated vxattr using getfattr
-        self.assertEqual(
-                int(float(self.mount_a.getfattr(test_dir, "ceph.dmclock.mds_reservation"))),
-                reservation)
-        self.assertEqual(
-                int(float(self.mount_a.getfattr(test_dir, "ceph.dmclock.mds_weight"))),
-                weight)
-        self.assertEqual(
-                int(float(self.mount_a.getfattr(test_dir, "ceph.dmclock.mds_limit"))),
-                limit)
-
-        stat_qos = self.dump_qos()
-        log.info(stat_qos)
-
-        # check updated dmclock info using dump qos
-        for info in stat_qos:
-            self.assertIn("volume_id", info)
-            print(path.join(self.get_subvolume_path(self.subvolumes[0]), "test_dir"))
-            self.assertNotEqual(path.join(self.get_subvolume_path(self.subvolumes[0]), "test_dir"), info["volume_id"])
+        self.assertIsNone(self.mount_a.getfattr(test_dir, "ceph.dmclock.mds_reservation"))
+        self.assertIsNone(self.mount_a.getfattr(test_dir, "ceph.dmclock.mds_limit"))
+        self.assertIsNone(self.mount_a.getfattr(test_dir, "ceph.dmclock.mds_weight"))
 
     def test_mount_subdir_update_qos_value(self):
-        from os import mkdir, path
         import threading
 
         self.enable_qos()
@@ -292,16 +296,10 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_limit", str(limit)])
         self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_weight", str(weight)])
 
-        mkdir(path.join(self.mount_a.hostfs_mntpt, "test_dir"))
-
-        self.mount_a.umount_wait()
-        self.mount_a.mount(cephfs_mntpt=path.join(self.get_subvolume_path(self.subvolumes[0]), "test_dir"))
-
         reservation, weight, limit = 100, 100, 100
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.set_qos_xattr(self.mount_a, reservation, weight, limit)
 
         # check updated vxattr using getfattr
         self.assertEqual(
@@ -313,6 +311,8 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.assertEqual(
                 int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))),
                 limit)
+
+        self.remount_subvolume_path_root(self.mount_a)
 
         stat_qos = self.dump_qos()
         log.info(stat_qos)
@@ -341,14 +341,11 @@ class TestMDSDmclockQoS(CephFSTestCase):
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
-        self.mount_b.umount_wait()
-        self.mount_b.mount(cephfs_mntpt=self.get_subvolume_path(self.subvolumes[0]))
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_a))
 
         reservation, weight, limit = 50, 50, 50
-
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+        self.set_qos_xattr(self.mount_a, reservation, weight, limit)
 
         # check remote vxattr
         self.assertEqual(
@@ -424,10 +421,10 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dir.pin", str(1))  # pinning to QoS disabled MDS
 
         reservation, weight, limit = 25, 50, 50
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.set_qos_xattr(self.mount_a, reservation, weight, limit)
+        self.remount_subvolume_path_root(self.mount_a)
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
 
         threads = []
         results = [0, 0]
@@ -456,9 +453,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(0))
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.set_qos_xattr(self.mount_a, reservation, weight, limit)
+        self.remount_subvolume_path_root(self.mount_a)
 
         stat_qos = self.dump_qos()
         log.info(stat_qos)
@@ -492,9 +489,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(0))
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.set_qos_xattr(self.mount_a, reservation, weight, limit)
+        self.remount_subvolume_path_root(self.mount_a)
 
         stat_qos = self.dump_qos()
         log.info(stat_qos)
@@ -529,14 +526,13 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.enable_qos()
 
         reservation, weight, limit = 100, 100, 100
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.set_qos_xattr(self.mount_a, reservation, weight, limit)
+        self.remount_subvolume_path_root(self.mount_a)
 
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
-        self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
-
-        self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation * 2))
-        self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit * 2))
-        self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight * 2))
+        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_b))
+        self.set_qos_xattr(self.mount_b, reservation*2, weight*2, limit*2)
+        self.remount_subvolume_path_root(self.mount_b)
 
         stat_qos = self.dump_qos()
         log.info(stat_qos)
@@ -566,7 +562,6 @@ class TestMDSDmclockQoS(CephFSTestCase):
 def workload_create_files(tid, mount, test_cnt, results):
     from os import path, mkdir
     import time
-    from pathlib import Path
 
     base = path.join(mount.hostfs_mntpt, "thread_{0}".format(tid))
     mkdir(base)
