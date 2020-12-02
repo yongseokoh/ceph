@@ -226,20 +226,19 @@ int MDSDmclockScheduler::get_inflight_request(const VolumeId &vid)
   return vi->get_inflight_request();
 }
 
-void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const double reservation, const double weight, const double limit, const bool use_default)
+void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const ClientInfo &client_info, const bool use_default)
 {
   std::lock_guard lock(volume_info_lock);
   VolumeInfo* vi = get_volume_info_ptr(vid);
 
-  dout(0) << "create_volume_info() reservation = " << reservation << " weight " << weight <<
-    " limit " << limit << " use_default " << use_default<< dendl;
+  dout(10) << __func__ << " vid " << vid << " client_info " << client_info << " use_default" <<  use_default << dendl;
 
   if (vi == nullptr) {
     auto [it, success]  = volume_info_map.insert(std::make_pair(std::move(vid), std::move(VolumeInfo())));
     ceph_assert(success==true);
     vi = &it->second;
   }
-  vi->update_volume_info(reservation, weight, limit, use_default);
+  vi->update_volume_info(client_info, use_default);
 
   enqueue_update_request(vid);
 }
@@ -273,19 +272,15 @@ void MDSDmclockScheduler::delete_session_from_volume_info(const VolumeId &vid, c
   }
 }
 
-void MDSDmclockScheduler::update_volume_info(const VolumeId &vid, double reservation, double weight, double limit, bool use_default)
+void MDSDmclockScheduler::update_volume_info(const VolumeId &vid, const ClientInfo& client_info, const bool use_default)
 {
   std::lock_guard lock(volume_info_lock);
 
-  dout(0) << "update_volume_info" << 
-             " reservation " << reservation <<
-             " weight " << weight << 
-             " limit " << limit << 
-             " use_default " << use_default << dendl;
+  dout(10) << __func__ << client_info << " use_default " << use_default << dendl;
   
   VolumeInfo* vi = get_volume_info_ptr(vid);
   if (vi) {
-    vi->update_volume_info(reservation, weight, limit, use_default);
+    vi->update_volume_info(client_info, use_default);
     enqueue_update_request(vid);
   } else {
     dout(0) << "VolumeInfo is unavaiable (vid = " << vid << ")" << dendl;
@@ -294,9 +289,10 @@ void MDSDmclockScheduler::update_volume_info(const VolumeId &vid, double reserva
 
 void MDSDmclockScheduler::set_default_volume_info(const VolumeId &vid)
 {
-  dout(0) << "set_default_volume_info vid " << vid  << dendl;
+  ClientInfo client_info(0.0, 0.0, 0.0);
+  dout(0) << __func__ << " vid " << vid << client_info << dendl;
 
-  update_volume_info(vid, 0.0, 0.0, 0.0, true);
+  update_volume_info(vid, client_info, true);
 }
 
 void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
@@ -319,24 +315,17 @@ void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
                       pip->dmclock_info.mds_weight > 0.0 &&
                       pip->dmclock_info.mds_limit > 0.0);
 
-    double reservation;
-    double weight;
-    double limit;
-    bool use_default;
+    ClientInfo client_info(0.0, 0.0, 0.0);
+    bool use_default = true;
 
     if (in && qos_valid) {
-      reservation = pip->dmclock_info.mds_reservation;
-      weight = pip->dmclock_info.mds_weight;
-      limit = pip->dmclock_info.mds_limit;
+      client_info.update(pip->dmclock_info.mds_reservation,
+                  pip->dmclock_info.mds_weight,
+                  pip->dmclock_info.mds_limit);
       use_default = false;
-    } else {
-      reservation = 0.0;
-      weight = 0.0;
-      limit = 0.0;
-      use_default = true;
     }
 
-    create_volume_info(vid, reservation, weight, limit, use_default);
+    create_volume_info(vid, client_info, use_default);
   } 
   add_session_to_volume_info(vid, sid);
 }
@@ -357,24 +346,17 @@ void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid)
 		    pip->dmclock_info.mds_weight > 0.0 &&
 		    pip->dmclock_info.mds_limit > 0.0);
 
-  double reservation;
-  double weight;
-  double limit;
-  bool use_default;
+  ClientInfo info(0.0, 0.0, 0.0);
+  bool use_default = true;
 
   if (in && qos_valid) {
-    reservation = pip->dmclock_info.mds_reservation;
-    weight = pip->dmclock_info.mds_weight;
-    limit = pip->dmclock_info.mds_limit;
+    info.update(pip->dmclock_info.mds_reservation,
+                pip->dmclock_info.mds_weight,
+                pip->dmclock_info.mds_limit);
     use_default = false;
-  } else {
-    reservation = 0.0;
-    weight = 0.0;
-    limit = 0.0;
-    use_default = true;
   }
 
-  update_volume_info(vid, reservation, weight, limit, use_default);
+  update_volume_info(vid, info, use_default);
 }
 
 
