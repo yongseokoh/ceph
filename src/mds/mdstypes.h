@@ -330,7 +330,7 @@ struct dmclock_info_t
     decode(mds_weight, p);
     DECODE_FINISH(p);
   }
-  bool is_valid() {
+  bool is_valid() const {
     return mds_reservation > 0 && mds_limit > 0 && mds_weight > 0;
   }
   void dump(Formatter *f) const;
@@ -341,6 +341,8 @@ WRITE_CLASS_ENCODER(dmclock_info_t)
 inline bool operator==(const dmclock_info_t &l, const dmclock_info_t &r) {
   return memcmp(&l, &r, sizeof(l)) == 0;
 }
+
+std::ostream& operator<<(std::ostream &out, const dmclock_info_t &n);
 
 struct quota_info_t
 {

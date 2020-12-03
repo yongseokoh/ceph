@@ -21,6 +21,7 @@
 #include <map>
 #include <mutex>
 #include <deque>
+#include <vector>
 
 #include "include/types.h"
 #include "mdstypes.h"
@@ -300,7 +301,7 @@ public:
   void delete_qos_info_by_session(Session *session);
 
   /* multi MDS broadcast message */
-  void broadcast_qos_info_update_to_mds(const VolumeId& vid);
+  void broadcast_qos_info_update_to_mds(const VolumeId& vid, bool create);
   void handle_qos_info_update_message(const cref_t<MDSDmclockQoS> &m);
   void proc_message(const cref_t<Message> &m);
 
@@ -331,6 +332,7 @@ public:
 
   const VolumeId get_volume_id(Session *session);
   const SessionId get_session_id(Session *session);
+  const std::vector<SessionId> get_sessions_with_vid(VolumeId vid);
   const VolumeId convert_subvol_root(const VolumeId& volume_id);
 
   using RejectThreshold = Time;

@@ -28,9 +28,11 @@ public:
 
 private:
   std::string volume_id;
+  bool create;
 
  public:
   std::string get_volume_id() const { return volume_id; }
+  bool is_create_msg() const { return create; }
 
 protected:
 #ifndef MASTER_VERSION
@@ -45,6 +47,8 @@ protected:
 #else
   MDSDmclockQoS(const std::string& _volume_id) : MMDSOp{MSG_MDS_DMCLOCK_QOS, HEAD_VERSION, COMPAT_VERSION}, volume_id(_volume_id) {}
 #endif
+  MDSDmclockQoS(const std::string& _volume_id, const bool _create) :
+    MMDSOp{MSG_MDS_DMCLOCK_QOS, HEAD_VERSION, COMPAT_VERSION}, volume_id(_volume_id), create(_create) {}
   ~MDSDmclockQoS() override {}
 
 public:
@@ -53,11 +57,13 @@ public:
   void encode_payload(uint64_t features) override {
     using ceph::encode;
     encode(volume_id, payload);
+    encode(create, payload);
   }
   void decode_payload() override {
     using ceph::decode;
     auto p = payload.cbegin();
     decode(volume_id, p);
+    decode(create, p);
     ceph_assert(p.end());
   }
 

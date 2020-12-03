@@ -10832,28 +10832,14 @@ void MDCache::decode_replica_inode(CInode *&in, bufferlist::const_iterator& p, C
 
   DECODE_FINISH(p); 
 
-  dout(20) << "decode_replica_inode reservation: " 
-    << in->inode->dmclock_info.mds_reservation
-    << " weight: " << in->inode->dmclock_info.mds_weight 
-    << " limit: " << in->inode->dmclock_info.mds_limit << dendl;
-
   auto& dmclock_info = in->inode->dmclock_info;
-  bool qos_valid = (dmclock_info.mds_reservation > 0.0 &&
-		    dmclock_info.mds_weight > 0.0 &&
-		    dmclock_info.mds_limit > 0.0);
+  dout(20) << "decode_replica_inode: " << dmclock_info << dendl;
 
-  if (qos_valid) {
-    string path;
-    if (in->is_root()) {
-      path = "/";
-    } else {
-      in->make_path_string(path, true);
-    }
+  string path;
+  in->make_path_string(path, true);
 
-    ClientInfo client_info(dmclock_info.mds_reservation, dmclock_info.mds_weight, dmclock_info.mds_limit);
-
-    mds->mds_dmclock_scheduler->update_volume_info(path, client_info, false);
-  }
+  ClientInfo client_info(dmclock_info.mds_reservation, dmclock_info.mds_weight, dmclock_info.mds_limit);
+  mds->mds_dmclock_scheduler->update_volume_info(path, client_info, !dmclock_info.is_valid());
 }
 
  
