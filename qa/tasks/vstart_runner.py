@@ -1683,9 +1683,9 @@ def exec_test():
     ceph_cluster.set_ceph_conf("global", "mds root ino gid", "%s" % os.getgid())
 
     if opt_mds_qos:
-        ceph_cluster.set_ceph_conf("mds", "mds_dmclock_mds_qos_enable", "true")
+        ceph_cluster.set_ceph_conf("mds", "mds_dmclock_enable", "true")
     else:
-        ceph_cluster.set_ceph_conf("mds", "mds_dmclock_mds_qos_enable", "false")
+        ceph_cluster.set_ceph_conf("mds", "mds_dmclock_enable", "false")
 
     # Monkeypatch get_package_version to avoid having to work out what kind of distro we're on
     def _get_package_version(remote, pkg_name):
