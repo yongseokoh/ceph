@@ -8559,25 +8559,22 @@ std::vector<Option> get_mds_options() {
      .set_description("interval in seconds for metrics data update.")
      .set_long_description("interval in seconds after which active MDSs send client metrics data to rank 0."),
 
-    Option("mds_dmclock_mds_qos_enable", Option::TYPE_BOOL, Option::LEVEL_DEV)
+    Option("mds_dmclock_enable", Option::TYPE_BOOL, Option::LEVEL_DEV)
      .set_default(false)
-     .set_description("")
-     .set_long_description(""),
+     .set_description("enable mds dmClock QoS scheduler")
+     .set_long_description("This option can be configured when reservation, weight, and limit values are greater than zero."),
 
-    Option("mds_dmclock_mds_qos_default_reservation", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+    Option("mds_dmclock_reservation", Option::TYPE_FLOAT, Option::LEVEL_DEV)
      .set_default(10000)
-     .set_description("")
-     .set_long_description(""),
+     .set_description("dmclock reservation for each MDS client"),
 
-    Option("mds_dmclock_mds_qos_default_weight", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+    Option("mds_dmclock_weight", Option::TYPE_FLOAT, Option::LEVEL_DEV)
      .set_default(10000)
-     .set_description("")
-     .set_long_description(""),
+     .set_description("dmclock weight for each MDS client"),
 
-    Option("mds_dmclock_mds_qos_default_limit", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+    Option("mds_dmclock_limit", Option::TYPE_FLOAT, Option::LEVEL_DEV)
      .set_default(10000)
-     .set_description("")
-     .set_long_description(""),
+     .set_description("dmclock limit for each MDS client"),
   });
 }
 

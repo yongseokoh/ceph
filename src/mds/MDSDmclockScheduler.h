@@ -384,10 +384,10 @@ public:
 
     begin_schedule_thread();
 
-    default_conf.set_reservation(g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation"));
-    default_conf.set_weight(g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight"));
-    default_conf.set_limit(g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit"));
-    default_conf.set_status(g_conf().get_val<bool>("mds_dmclock_mds_qos_enable"));
+    default_conf.set_reservation(g_conf().get_val<double>("mds_dmclock_reservation"));
+    default_conf.set_weight(g_conf().get_val<double>("mds_dmclock_weight"));
+    default_conf.set_limit(g_conf().get_val<double>("mds_dmclock_limit"));
+    default_conf.set_status(g_conf().get_val<bool>("mds_dmclock_enable"));
 
     ceph_assert(ROOT_VOLUME_ID == "/");
   }
