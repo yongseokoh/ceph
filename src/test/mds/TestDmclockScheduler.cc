@@ -321,7 +321,6 @@ Queue::HandleRequestFunc handle_request_f = [] /* &complete_count, &request_coun
 (const VolumeId& id, std::unique_ptr<ClientRequest>&& request, const PhaseType& phase_type, const uint64_t cost)
 {
   complete_count++;
-  dout(0) << "handle request count " << complete_count << "/" << request_count << dendl;
 };
 
 MDSDmclockScheduler *create_dmclock_scheduler()
