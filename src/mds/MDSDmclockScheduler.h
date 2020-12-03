@@ -77,6 +77,18 @@ public:
     return type;
   }
 
+  std::string_view get_request_type_str() const
+  {
+    switch(type) {
+      case RequestType::CLIENT_REQUEST:
+        return "CLIENT_REQUEST";
+      case RequestType::UPDATE_REQUEST:
+        return "UPDATE_REQUEST";
+      default:
+        return "UNKOWN_REQUEST";
+    }
+  }
+
   const VolumeId& get_volume_id() const
   {
     return volume_id;
@@ -320,6 +332,7 @@ public:
   /* request event handler */
   void begin_schedule_thread();
   void process_request();
+  void process_request_handler();
   std::thread scheduler_thread;
   mutable std::mutex queue_mutex;
   std::condition_variable queue_cvar;

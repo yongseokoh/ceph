@@ -837,9 +837,7 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
 	     << ", noop" << dendl;
     // close must have been canceled (by an import?), or any number of other things..
   } else if (open) {
-    if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
-      mds->mds_dmclock_scheduler->create_qos_info_from_xattr(session);
-    }
+    mds->mds_dmclock_scheduler->create_qos_info_from_xattr(session);
     ceph_assert(session->is_opening());
     mds->sessionmap.set_state(session, Session::STATE_OPEN);
     mds->sessionmap.touch_session(session);
@@ -897,9 +895,7 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
         session->get_connection()->mark_disposable();
       }
 
-      if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
-        mds->mds_dmclock_scheduler->delete_qos_info_by_session(session);
-      }
+      mds->mds_dmclock_scheduler->delete_qos_info_by_session(session);
 
       // reset session
       mds->send_message_client(make_message<MClientSession>(CEPH_SESSION_CLOSE), session);
@@ -914,9 +910,7 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
         mds->sessionmap.set_state(session, Session::STATE_CLOSED);
         session->set_connection(nullptr);
       }
-      if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
-        mds->mds_dmclock_scheduler->delete_qos_info_by_session(session);
-      }
+      mds->mds_dmclock_scheduler->delete_qos_info_by_session(session);
       metrics_handler->remove_session(session);
       mds->sessionmap.remove_session(session);
     } else {
@@ -1005,10 +999,7 @@ void Server::finish_force_open_sessions(const map<client_t,pair<Session*,uint64_
 	mds->sessionmap.set_state(session, Session::STATE_OPEN);
 	mds->sessionmap.touch_session(session);
         metrics_handler->add_session(session);
-
-        if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
-          mds->mds_dmclock_scheduler->create_qos_info_from_xattr(session);
-        }
+        mds->mds_dmclock_scheduler->create_qos_info_from_xattr(session);
 
 	auto reply = make_message<MClientSession>(CEPH_SESSION_OPEN);
 	if (session->info.has_feature(CEPHFS_FEATURE_MIMIC))
@@ -1488,9 +1479,7 @@ void Server::handle_client_reconnect(const cref_t<MClientReconnect> &m)
 
   if (!m->has_more()) {
     metrics_handler->add_session(session);
-    if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
-      mds->mds_dmclock_scheduler->create_qos_info_from_xattr(session);
-    }
+    mds->mds_dmclock_scheduler->create_qos_info_from_xattr(session);
     // notify client of success with an OPEN
     auto reply = make_message<MClientSession>(CEPH_SESSION_OPEN);
     if (session->info.has_feature(CEPHFS_FEATURE_MIMIC))
@@ -5966,7 +5955,7 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur)
 
       mds->mds_dmclock_scheduler->set_default_volume_info(path);
 
-    // log + wait
+      // log + wait
       mdr->ls = mdlog->get_current_segment();
       EUpdate *le = new EUpdate(mdlog, "remove dmclock vxattr");
       mdlog->start_entry(le);
