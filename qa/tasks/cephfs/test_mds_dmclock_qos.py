@@ -82,15 +82,15 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
     def enable_qos(self, id=None):
         if id:
-            self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_enable", "true"], mds_id=id)
+            self.fs.mds_asok(["config", "set", "mds_dmclock_enable", "true"], mds_id=id)
         else:
-            self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_enable", "true"])
+            self.mds_asok_all(["config", "set", "mds_dmclock_enable", "true"])
 
     def disable_qos(self, id=None):
         if id:
-            self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_enable", "false"], mds_id=id)
+            self.fs.mds_asok(["config", "set", "mds_dmclock_enable", "false"], mds_id=id)
         else:
-            self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_enable", "false"])
+            self.mds_asok_all(["config", "set", "mds_dmclock_enable", "false"])
 
     def is_equal_dict(self, a, b, ignore_key=[]):
         ignore_key = set(ignore_key)
@@ -185,9 +185,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         reservation, weight, limit = 200, 200, 200
 
-        self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_reservation", str(reservation)])
-        self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_limit", str(limit)])
-        self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_weight", str(weight)])
+        self.mds_asok_all(["config", "set", "mds_dmclock_reservation", str(reservation)])
+        self.mds_asok_all(["config", "set", "mds_dmclock_limit", str(limit)])
+        self.mds_asok_all(["config", "set", "mds_dmclock_weight", str(weight)])
 
         for id in self.fs.mds_ids:
             stat_qos = self.dump_qos(id)
@@ -292,9 +292,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         self.enable_qos()
         reservation, weight, limit = 50, 50, 50
-        self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_reservation", str(reservation)])
-        self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_limit", str(limit)])
-        self.mds_asok_all(["config", "set", "mds_dmclock_mds_qos_default_weight", str(weight)])
+        self.mds_asok_all(["config", "set", "mds_dmclock_reservation", str(reservation)])
+        self.mds_asok_all(["config", "set", "mds_dmclock_limit", str(limit)])
+        self.mds_asok_all(["config", "set", "mds_dmclock_weight", str(weight)])
 
         reservation, weight, limit = 100, 100, 100
 
@@ -377,13 +377,13 @@ class TestMDSDmclockQoS(CephFSTestCase):
             elif rank['name'] == 'b':
                 self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dir.pin", str(rank['rank']))
 
-        self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_reservation", str(reservation)], mds_id='a')
-        self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_limit", str(limit)], mds_id='a')
-        self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_weight", str(weight)], mds_id='a')
+        self.fs.mds_asok(["config", "set", "mds_dmclock_reservation", str(reservation)], mds_id='a')
+        self.fs.mds_asok(["config", "set", "mds_dmclock_limit", str(limit)], mds_id='a')
+        self.fs.mds_asok(["config", "set", "mds_dmclock_weight", str(weight)], mds_id='a')
 
-        self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_reservation", str(reservation * 2)], mds_id='b')
-        self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_limit", str(limit * 2)], mds_id='b')
-        self.fs.mds_asok(["config", "set", "mds_dmclock_mds_qos_default_weight", str(weight * 2)], mds_id='b')
+        self.fs.mds_asok(["config", "set", "mds_dmclock_reservation", str(reservation * 2)], mds_id='b')
+        self.fs.mds_asok(["config", "set", "mds_dmclock_limit", str(limit * 2)], mds_id='b')
+        self.fs.mds_asok(["config", "set", "mds_dmclock_weight", str(weight * 2)], mds_id='b')
 
         threads = []
         results = [0, 0]
