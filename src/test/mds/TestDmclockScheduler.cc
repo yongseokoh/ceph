@@ -46,10 +46,10 @@ TEST(MDSDmclockScheduler, ConfCheck)
 {
   g_ceph_context->_conf.set_val("debug mds", "0/20");
 
-  g_ceph_context->_conf.set_val("mds_dmclock_mds_qos_default_reservation", "10000");
-  g_ceph_context->_conf.set_val("mds_dmclock_mds_qos_default_weight", "10000");
-  g_ceph_context->_conf.set_val("mds_dmclock_mds_qos_default_limit", "10000");
-  g_ceph_context->_conf.set_val("mds_dmclock_mds_qos_enable", "true");
+  g_ceph_context->_conf.set_val("mds_dmclock_reservation", "10000");
+  g_ceph_context->_conf.set_val("mds_dmclock_weight", "10000");
+  g_ceph_context->_conf.set_val("mds_dmclock_limit", "10000");
+  g_ceph_context->_conf.set_val("mds_dmclock_enable", "true");
 
   MDSDmclockScheduler *scheduler = new MDSDmclockScheduler(mds);
 
@@ -60,7 +60,7 @@ TEST(MDSDmclockScheduler, ConfCheck)
 
   delete scheduler;
 
-  g_ceph_context->_conf.set_val("mds_dmclock_mds_qos_enable", "false");
+  g_ceph_context->_conf.set_val("mds_dmclock_enable", "false");
 
   scheduler = new MDSDmclockScheduler(mds);
 
