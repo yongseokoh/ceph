@@ -666,8 +666,8 @@ void MDSDmclockScheduler::handle_conf_change(const std::set<std::string>& change
 {
   dout(10) << __func__ << dendl;
 
-  if (changed.count("mds_dmclock_mds_qos_enable")) {
-    bool new_val = g_conf().get_val<bool>("mds_dmclock_mds_qos_enable");
+  if (changed.count("mds_dmclock_enable")) {
+    bool new_val = g_conf().get_val<bool>("mds_dmclock_enable");
     if (default_conf.is_enabled() != new_val)
     {
       if (new_val == true) {
@@ -678,20 +678,20 @@ void MDSDmclockScheduler::handle_conf_change(const std::set<std::string>& change
     }
   }
 
-  if (changed.count("mds_dmclock_mds_qos_default_reservation") || default_conf.is_enabled() == true) {
-    dout(10) << " set reservation " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation") << dendl;
-    default_conf.set_reservation(g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation"));
-    ceph_assert(default_conf.get_reservation() == g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation"));
+  if (changed.count("mds_dmclock_reservation") || default_conf.is_enabled() == true) {
+    dout(10) << " set reservation " << g_conf().get_val<double>("mds_dmclock_reservation") << dendl;
+    default_conf.set_reservation(g_conf().get_val<double>("mds_dmclock_reservation"));
+    ceph_assert(default_conf.get_reservation() == g_conf().get_val<double>("mds_dmclock_reservation"));
   }
-  if (changed.count("mds_dmclock_mds_qos_default_weight") || default_conf.is_enabled() == true) {
-    dout(10) << " set weight " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight") << dendl;
-    default_conf.set_weight(g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight"));
-    ceph_assert(default_conf.get_weight() == g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight"));
+  if (changed.count("mds_dmclock_weight") || default_conf.is_enabled() == true) {
+    dout(10) << " set weight " << g_conf().get_val<double>("mds_dmclock_weight") << dendl;
+    default_conf.set_weight(g_conf().get_val<double>("mds_dmclock_weight"));
+    ceph_assert(default_conf.get_weight() == g_conf().get_val<double>("mds_dmclock_weight"));
   }
-  if (changed.count("mds_dmclock_mds_qos_default_limit") || default_conf.is_enabled() == true) {
-    dout(10) << " set limit " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit") << dendl;
-    default_conf.set_limit(g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit"));
-    ceph_assert(default_conf.get_limit() == g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit"));
+  if (changed.count("mds_dmclock_limit") || default_conf.is_enabled() == true) {
+    dout(10) << " set limit " << g_conf().get_val<double>("mds_dmclock_limit") << dendl;
+    default_conf.set_limit(g_conf().get_val<double>("mds_dmclock_limit"));
+    ceph_assert(default_conf.get_limit() == g_conf().get_val<double>("mds_dmclock_limit"));
   }
 
   /* need to check whether conf is updated from ceph.conf when the MDS is restarted */
