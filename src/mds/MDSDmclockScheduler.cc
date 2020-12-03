@@ -24,10 +24,12 @@
 ostream& operator<<(ostream& os, VolumeInfo* vi)
 {
   if (vi) {
-    os << "VolumeInfo: (session_cnt " << vi->get_session_cnt() << ") "<< "reservation=" << vi->get_reservation() << " weight=" <<
-      vi->get_weight() << " limit=" << vi->get_limit();
+    os << "VolumeInfo: (session_cnt " << vi->get_session_cnt() << ") "
+        << " reservation " << vi->get_reservation()
+        << " weight" << vi->get_weight()
+        << " limit " << vi->get_limit();
   } else {
-    os << "VolumeInfo is nullptr";
+    os << "VolumeInfo has nullptr";
   }
   return os;
 }
@@ -60,30 +62,33 @@ const VolumeId MDSDmclockScheduler::get_session_id(Session *session)
 template<typename R>
 void MDSDmclockScheduler::enqueue_client_request(const R &mds_req, VolumeId volume_id)
 {
-    std::unique_lock<std::mutex> lock(queue_mutex);
-    request_queue.emplace_back(new ClientRequest(mds_req, volume_id, crimson::dmclock::get_time(), 1));
-    /* wake up*/
-    lock.unlock();
-    queue_cvar.notify_all();
+  dout(10) << __func__ << " volume_id " << volume_id << dendl;
+
+  std::unique_lock<std::mutex> lock(queue_mutex);
+  request_queue.emplace_back(new ClientRequest(mds_req, volume_id, crimson::dmclock::get_time(), 1));
+  /* wake up*/
+  lock.unlock();
+  queue_cvar.notify_all();
 }
 
 void MDSDmclockScheduler::handle_mds_request(const MDSReqRef &mds_req)
 {
   ceph_assert(mds_is_locked_by_me());
+  dout(10) << __func__ << " " << *mds_req << dendl;
 
-  if (mds->mds_dmclock_scheduler->default_conf.is_enabled() == true && mds_req->get_orig_source().is_client()) {
+  if (mds->mds_dmclock_scheduler->default_conf.is_enabled() == true
+      && mds_req->get_orig_source().is_client()) {
     auto volume_id = get_volume_id(mds->get_session(mds_req));
-    dout(0) << "add request to add thread " << volume_id << dendl;
     enqueue_client_request<MDSReqRef>(mds_req, volume_id);
   } else {
-    dout(0) << "add request to mds " << dendl;
     mds->server->handle_client_request(mds_req);
   }
 }
 
-void MDSDmclockScheduler::submit_request_to_mds(const VolumeId& vid, std::unique_ptr<ClientRequest>&& request, const PhaseType& phase_type, const uint64_t cost)
+void MDSDmclockScheduler::submit_request_to_mds(const VolumeId& vid, std::unique_ptr<ClientRequest>&& request,
+                                                const PhaseType& phase_type, const uint64_t cost)
 {
-  dout(0) << "submit_request_to_mds(): volume vid " << vid << dendl;
+  dout(10) << __func__ << " volume_id " << vid << dendl;
 
   const MDSReqRef& req = request->mds_req_ref;
 
@@ -100,6 +105,8 @@ void MDSDmclockScheduler::submit_request_to_mds(const VolumeId& vid, std::unique
 
 void MDSDmclockScheduler::shutdown()
 {
+  dout(10) << __func__ << " state " << get_state_str() << dendl;
+
   if (default_conf.is_enabled() == true) {
     disable_qos_feature();
   }
@@ -115,27 +122,29 @@ void MDSDmclockScheduler::shutdown()
 
   state = SchedulerState::SHUTDOWN;
 
-  dout(0) << "MDSDmclockScheduler::shutdown()" << dendl;
+  dout(10) << __func__ << " state " << get_state_str() << dendl;
 }
 
 MDSDmclockScheduler::~MDSDmclockScheduler()
 {
+  dout(10) << __func__ << dendl;
   shutdown();
   delete dmclock_queue;
 }
 
 const ClientInfo *MDSDmclockScheduler::get_client_info(const VolumeId &vid)
 {
+  dout(10) << __func__ << " volume_id " << vid << dendl;
   std::lock_guard lock(volume_info_lock);
 
   auto vi = get_volume_info_ptr(vid);
   const ClientInfo *ci = nullptr;
   if (vi != nullptr) {
     if (vi->is_use_default() == true) {
-      dout(0) << "get_client_info with default " << *default_conf.get_qos_info() << dendl;
+      dout(15) << __func__ << " default QoS " << *default_conf.get_qos_info() << dendl;
       ci = default_conf.get_qos_info();
     } else {
-      dout(0) << "get_client_info with per client specific " << vi->get_qos_info() << dendl;
+      dout(15) << __func__ <<  " per client specific QoS " << vi->get_qos_info() << dendl;
       ci = vi->get_qos_info();
     }
   }
@@ -226,12 +235,14 @@ int MDSDmclockScheduler::get_inflight_request(const VolumeId &vid)
   return vi->get_inflight_request();
 }
 
-void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const ClientInfo &client_info, const bool use_default)
+void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const ClientInfo &client_info,
+                                              const bool use_default)
 {
+  dout(10) << __func__ << " volume_id " << vid << " client_info "
+          << client_info << " use_default" <<  use_default << dendl;
+
   std::lock_guard lock(volume_info_lock);
   VolumeInfo* vi = get_volume_info_ptr(vid);
-
-  dout(10) << __func__ << " vid " << vid << " client_info " << client_info << " use_default" <<  use_default << dendl;
 
   if (vi == nullptr) {
     auto [it, success]  = volume_info_map.insert(std::make_pair(std::move(vid), std::move(VolumeInfo())));
@@ -245,10 +256,9 @@ void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const ClientIn
 
 void MDSDmclockScheduler::add_session_to_volume_info(const VolumeId &vid, const SessionId &sid)
 {
+  dout(10) << __func__ << " volume_id " << vid << " session_id " << sid << dendl;
+
   std::lock_guard lock(volume_info_lock);
-
-  dout(1) << __func__ << dendl;
-
   VolumeInfo* vi = get_volume_info_ptr(vid);
   ceph_assert(vi!=nullptr);
   vi->add_session(sid);
@@ -256,55 +266,61 @@ void MDSDmclockScheduler::add_session_to_volume_info(const VolumeId &vid, const 
 
 void MDSDmclockScheduler::delete_session_from_volume_info(const VolumeId &vid, const SessionId &sid)
 {
+  dout(10) << __func__ << " volume_id " << vid << " session_id " << sid << dendl;
+
   std::lock_guard lock(volume_info_lock);
 
   auto it = volume_info_map.find(vid);
   if (it != volume_info_map.end()) {
     auto vi = &it->second;
-    //vi->dec_ref_cnt();
     vi->remove_session(sid);
-    dout(0) << "delete volume info " << vi->get_session_cnt() << dendl;
     if (vi->get_session_cnt() == 0) {
+      dout(15) << __func__ << " erase volume info due to no sessions (volume_id  "
+                <<  vid << " session_id " << sid << ")" << dendl;
       ceph_assert(vi->get_inflight_request()==0);
       volume_info_map.erase(it);
     }
-    /*TODO: delete client info in ClientRec */
+    /*TODO: delete client info in ClientRec, but dmclock supports only removal of idle clients */
   }
 }
 
 void MDSDmclockScheduler::update_volume_info(const VolumeId &vid, const ClientInfo& client_info, const bool use_default)
 {
-  std::lock_guard lock(volume_info_lock);
+  dout(10) << __func__ << " volume_id " << vid << " " << client_info << " use_default " << use_default << dendl;
 
-  dout(10) << __func__ << client_info << " use_default " << use_default << dendl;
+  std::lock_guard lock(volume_info_lock);
   
   VolumeInfo* vi = get_volume_info_ptr(vid);
   if (vi) {
     vi->update_volume_info(client_info, use_default);
     enqueue_update_request(vid);
   } else {
-    dout(0) << "VolumeInfo is unavaiable (vid = " << vid << ")" << dendl;
+    dout(5) << " VolumeInfo is unavaiable (vid = " << vid << ")" << dendl;
   }
 }
 
 void MDSDmclockScheduler::set_default_volume_info(const VolumeId &vid)
 {
   ClientInfo client_info(0.0, 0.0, 0.0);
-  dout(0) << __func__ << " vid " << vid << client_info << dendl;
-
+  dout(10) << __func__ << " vid " << vid << " " << client_info << dendl;
   update_volume_info(vid, client_info, true);
 }
 
 void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
 {
+  if (get_default_conf().is_enabled() == false) {
+    return;
+  }
+
   if (session == nullptr) {
+    dout(5) << __func__ << " session is nullptr" << dendl;
     return;
   }
 
   VolumeId vid = get_volume_id(session);
   SessionId sid = get_session_id(session);
 
-  dout(0) << "create_qos_info_from_xattr() root = " << vid <<  dendl;
+  dout(10) << __func__ << " volume_id " << vid << " session_id " << sid <<  dendl;
 
   if (check_volume_info_existence(vid) == false) {
     CInode *in = read_xattrs(vid);
@@ -327,14 +343,16 @@ void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
 
     create_volume_info(vid, client_info, use_default);
   } 
+
   add_session_to_volume_info(vid, sid);
 }
 
 void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid)
 {
-  dout(0) << "update_qos_info_from_xattr() root = " << vid <<  dendl;
+  dout(10) << __func__ << " volume_id " << vid <<  dendl;
 
   if (check_volume_info_existence(vid) == false) {
+    dout(5) << __func__ << " volume info (" << vid << ") is unavaiable" << dendl;
     return;
   }
 
@@ -362,44 +380,42 @@ void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid)
 
 void MDSDmclockScheduler::delete_qos_info_by_session(Session *session)
 {
+  if (get_default_conf().is_enabled() == false) {
+    return;
+  }
   VolumeId vid = get_volume_id(session);
   SessionId sid = get_session_id(session);
-  dout(0) << "delete qos info when session is closed (volume_id " << vid << ")" << dendl;
+  dout(10) << __func__ << " volume_id " << vid << " session_id " << sid << dendl;
   delete_session_from_volume_info(vid, sid);
 }
 
 void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& vid)
 {
+  dout(10) << __func__ << " volume_id " << vid << " from " << mds->get_nodeid() << dendl;
+
   std::set<mds_rank_t> actives;
   mds->get_mds_map()->get_active_mds_set(actives);
 
-  dout(0) << "broadcast_qos_info_update_to_mds()" << dendl;
-  dout(0) << "i am mds " << mds->get_nodeid() << dendl;
-
   for (auto it : actives) {
-    dout(0) << "active MDS " << it << dendl;
     if (mds->get_nodeid() == it) {
       continue;
     }
+    dout(10) << " send MDSDmclockQoS message (" << vid  << ") to MDS" << it << dendl;
     auto qos_msg = make_message<MDSDmclockQoS>(convert_subvol_root(vid));
-
     mds->send_message_mds(qos_msg, it);
-    dout(0) << "send message to MDS " << it << " vid: " << vid << dendl;
   }
 }
 
 void MDSDmclockScheduler::handle_qos_info_update_message(const cref_t<MDSDmclockQoS> &m)
 {
+  dout(10) << __func__ << " volume_id " << m->get_volume_id() << dendl;
+
   assert(mds_is_locked_by_me());
 
-  dout(0) << "handle_qos_info_update_message()" << dendl;
-  dout(0) << "receive send_message in " << mds->get_nodeid() << " volume_id " << m->get_volume_id() << dendl;
-
   if (check_volume_info_existence(m->get_volume_id()) == true) {
-    dout(0) << "session maintains client info for volume_id = " << m->get_volume_id() << dendl;
     update_qos_info_from_xattr(m->get_volume_id());
   } else {
-    dout(0) << "there is not client info for volume_id = " << m->get_volume_id() << dendl;
+    dout(5) << " MDS doesn't maintain client info for volume_id " << m->get_volume_id() << dendl;
   }
 }
 
@@ -418,15 +434,15 @@ void MDSDmclockScheduler::proc_message(const cref_t<Message> &m)
 uint32_t MDSDmclockScheduler::get_request_queue_size() const
 {
   std::unique_lock<std::mutex> lock(queue_mutex);
-
   return request_queue.size();
 }
 
 void MDSDmclockScheduler::enqueue_update_request(const VolumeId& vid)
 {
+    dout(10) << __func__ <<  " volume_id " << vid << dendl;
+
     std::unique_lock<std::mutex> lock(queue_mutex);
 
-    dout(0) << "Add update request volumeid " << vid << dendl;
     request_queue.emplace_back(new UpdateRequest(vid));
 
     /* wake up*/
@@ -436,62 +452,74 @@ void MDSDmclockScheduler::enqueue_update_request(const VolumeId& vid)
 
 void MDSDmclockScheduler::enqueue_update_request(const VolumeId& vid, RequestCB cb_func)
 {
+    dout(10) << __func__ <<  " volume_id " << vid << dendl;
+
     std::unique_lock<std::mutex> lock(queue_mutex);
 
-    dout(0) << "Add update request volumeid " << vid << dendl;
     request_queue.emplace_back(new UpdateRequest(vid, cb_func));
-
     /* wake up*/
     lock.unlock();
     queue_cvar.notify_all();
 }
 
-void MDSDmclockScheduler::process_request()
+void MDSDmclockScheduler::process_request_handler()
 {
-    std::unique_lock<std::mutex> lock(queue_mutex);
+  std::unique_lock<std::mutex> lock(queue_mutex);
+  queue_cvar.wait(lock);
 
-    while (state == SchedulerState::RUNNING) {
-      queue_cvar.wait(lock);
+  while (request_queue.size()) {
+    std::unique_ptr<Request> request = std::move(request_queue.front());
+    request_queue.erase(request_queue.begin());
 
-      while (request_queue.size()) {
-        std::unique_ptr<Request> request = std::move(request_queue.front());
-        request_queue.erase(request_queue.begin());
+    dout(10) << __func__ << " Process request type " << request->get_request_type_str() << dendl;
 
-        lock.unlock();
+    lock.unlock();
 
-        switch(request->get_request_type()) {
-          case RequestType::CLIENT_REQUEST:
-          {
-            std::unique_ptr<ClientRequest> c_request(static_cast<ClientRequest *>(request.release()));
-            dout(0) << "Pop client request (size " << request_queue.size() << " volume_id "
-                << c_request->get_volume_id() << " time " << c_request->time << " cost " << c_request->cost << ")" << dendl;
+    switch(request->get_request_type()) {
+      case RequestType::CLIENT_REQUEST:
+      {
+        std::unique_ptr<ClientRequest> c_request(static_cast<ClientRequest *>(request.release()));
 
-            increase_inflight_request(c_request->get_volume_id());
+        dout(10) << " Process client request (queue size " << request_queue.size()
+                << " volume_id " << c_request->get_volume_id()
+                << " time " << c_request->time
+                << " cost " << c_request->cost << ")" << dendl;
 
-            auto r = dmclock_queue->add_request(std::move(c_request), std::move(c_request->get_volume_id()),
-                {0, 0}, c_request->time, c_request->cost);
+        increase_inflight_request(c_request->get_volume_id());
 
-            dout(0) << "add request r value = " << r << dendl;
-            break;
-          }
-          case RequestType::UPDATE_REQUEST:
-          {
-            std::unique_ptr<UpdateRequest> c_request(static_cast<UpdateRequest *>(request.release()));
-            dout(0) << "Pop update request (size " << request_queue.size() << " volume_id "
-                << c_request->get_volume_id() << ")" << dendl;
-            dmclock_queue->update_client_info(c_request->get_volume_id());
+        dmclock_queue->add_request(std::move(c_request), std::move(c_request->get_volume_id()),
+            {0, 0}, c_request->time, c_request->cost);
 
-            if (c_request->cb_func) {
-              c_request->cb_func();
-            }
-            break;
-          }
+        break;
+      }
+      case RequestType::UPDATE_REQUEST:
+      {
+        std::unique_ptr<UpdateRequest> c_request(static_cast<UpdateRequest *>(request.release()));
+
+        dout(10) << " Process update request (queue size " << request_queue.size()
+                  << " volume_id " << c_request->get_volume_id() << ")" << dendl;
+
+        dmclock_queue->update_client_info(c_request->get_volume_id());
+
+        if (c_request->cb_func) {
+          c_request->cb_func();
         }
-
-        lock.lock();
+        break;
       }
     }
-    dout(0) << "scheduler_thread has been stopped." << dendl;
+
+    lock.lock();
+  }
+
+}
+
+void MDSDmclockScheduler::process_request()
+{
+  dout(10) << __func__ << " thread has been invoked" << dendl;
+  while (state == SchedulerState::RUNNING) {
+    process_request_handler();
+  }
+  dout(10) << __func__ << " thread has been joined" << dendl;
 }
 
 void MDSDmclockScheduler::begin_schedule_thread()
@@ -502,6 +530,8 @@ void MDSDmclockScheduler::begin_schedule_thread()
 CInode *MDSDmclockScheduler::read_xattrs(const VolumeId vid)
 {
   CInode *in;
+
+  dout(10) << __func__ << " volume_id " << vid << dendl;
 
   filepath path_(vid.c_str());
   auto qos_msg = make_message<MDSDmclockQoS>(vid);
@@ -526,22 +556,24 @@ CInode *MDSDmclockScheduler::read_xattrs(const VolumeId vid)
 
   auto pip = in->get_projected_inode();
 
-  dout(20) << "read_xattrs: found inode: " << pip << " version " << pip->version <<  dendl;
-  dout(20) << "dmclock_info, reservation: " << pip->dmclock_info.mds_reservation 
-    << " weight: " << pip->dmclock_info.mds_weight << " limit: " << pip->dmclock_info.mds_limit << dendl;
+  dout(20) << " found inode: " << pip << " version " << pip->version
+            << " dmclock_info reservation " << pip->dmclock_info.mds_reservation
+            << " weight " << pip->dmclock_info.mds_weight
+            << " limit " << pip->dmclock_info.mds_limit << dendl;
 
   return in;
 }
 
 void MDSDmclockScheduler::enable_qos_feature()
 {
-  dout(0) << "enable_qos_feature()" << dendl;
+  dout(10) << __func__ << dendl;
 
   default_conf.set_status(true);
 
   auto sessionmap = get_session_map();
 
   if (sessionmap == nullptr) {
+    dout(10) << __func__ << " sessionmap has nullptr" << dendl;
     return;
   }
 
@@ -559,6 +591,7 @@ void MDSDmclockScheduler::enable_qos_feature()
 
 void MDSDmclockScheduler::cancel_inflight_request()
 {
+  dout(10) << __func__ << dendl;
   std::lock_guard lock(volume_info_lock);
   std::list<Queue::RequestRef> req_list;
 
@@ -573,9 +606,10 @@ void MDSDmclockScheduler::cancel_inflight_request()
     }
   }
 
-  dout(0) << "Canceled Requests " << req_list.size() << dendl; 
+  dout(10) << __func__ << " canceled requests " << req_list.size() << dendl;
+
   for (auto& it : req_list) {
-    dout(0) << "Cancel Request " << it->get_volume_id() << dendl; 
+    dout(15) << " canceled request volume_id " << it->get_volume_id() << dendl;
     handle_request_func(it->get_volume_id(), std::move(it), PhaseType::reservation, 1);
   }
   ceph_assert(dmclock_queue->empty() == true);
@@ -586,7 +620,7 @@ void MDSDmclockScheduler::disable_qos_feature()
   uint32_t queue_size;
   bool dmclock_empty;
 
-  dout(0) << "disable_qos_feature()" << dendl;
+  dout(10) << __func__ << dendl;
 
   default_conf.set_status(false);
 
@@ -611,6 +645,7 @@ void MDSDmclockScheduler::disable_qos_feature()
   auto sessionmap = get_session_map();
 
   if (sessionmap == nullptr) {
+    dout(10) << __func__ << " sessionmap has nullptr" <<  dendl;
     return;
   }
 
@@ -629,7 +664,7 @@ void MDSDmclockScheduler::disable_qos_feature()
 
 void MDSDmclockScheduler::handle_conf_change(const std::set<std::string>& changed)
 {
-  dout(0) << "MDSDmclockScheduler::handle_conf_change() called" << dendl;
+  dout(10) << __func__ << dendl;
 
   if (changed.count("mds_dmclock_mds_qos_enable")) {
     bool new_val = g_conf().get_val<bool>("mds_dmclock_mds_qos_enable");
@@ -644,24 +679,26 @@ void MDSDmclockScheduler::handle_conf_change(const std::set<std::string>& change
   }
 
   if (changed.count("mds_dmclock_mds_qos_default_reservation") || default_conf.is_enabled() == true) {
+    dout(10) << " set reservation " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation") << dendl;
     default_conf.set_reservation(g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation"));
-    dout(0) << " set reservation " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation") << dendl;
     ceph_assert(default_conf.get_reservation() == g_conf().get_val<double>("mds_dmclock_mds_qos_default_reservation"));
   }
   if (changed.count("mds_dmclock_mds_qos_default_weight") || default_conf.is_enabled() == true) {
+    dout(10) << " set weight " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight") << dendl;
     default_conf.set_weight(g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight"));
-    dout(0) << " set weight " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight") << dendl;
     ceph_assert(default_conf.get_weight() == g_conf().get_val<double>("mds_dmclock_mds_qos_default_weight"));
   }
   if (changed.count("mds_dmclock_mds_qos_default_limit") || default_conf.is_enabled() == true) {
+    dout(10) << " set limit " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit") << dendl;
     default_conf.set_limit(g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit"));
-    dout(0) << " set limit " << g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit") << dendl;
     ceph_assert(default_conf.get_limit() == g_conf().get_val<double>("mds_dmclock_mds_qos_default_limit"));
   }
 
   /* need to check whether conf is updated from ceph.conf when the MDS is restarted */
-  dout(0) << "handle_conf_change() enable=" << default_conf.is_enabled() << " reservation=" << default_conf.get_reservation() << " weight=" 
-    << default_conf.get_weight() << " limit=" << default_conf.get_limit() << dendl;
+  dout(10) << __func__ <<  " enable " << default_conf.is_enabled()
+            << " reservation " << default_conf.get_reservation()
+            << " weight " << default_conf.get_weight()
+            << " limit " << default_conf.get_limit() << dendl;
 }
 
 mds_rank_t MDSDmclockScheduler::get_nodeid()
