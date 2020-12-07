@@ -308,13 +308,14 @@ public:
   void dump(Formatter *f) const;
 
   void create_qos_info_from_xattr(Session *session);
-  void update_qos_info_from_xattr(const VolumeId &vid);
+  void update_qos_info_from_xattr(const VolumeId &vid, const dmclock_info_t& dmclock_info);
   void delete_qos_info_by_session(Session *session);
 
   /* multi MDS broadcast message */
-  void broadcast_qos_info_update_to_mds(const VolumeId& vid);
+  void broadcast_qos_info_update_to_mds(const VolumeId& vid, const dmclock_info_t &dmclock_info);
   void handle_qos_info_update_message(const cref_t<MDSDmclockQoS> &m);
   void proc_message(const cref_t<Message> &m);
+  CInode* traverse_path_inode(const cref_t<MDSDmclockQoS> &m);
 
   void handle_mds_request(const MDSReqRef &req);
   template<typename R>
