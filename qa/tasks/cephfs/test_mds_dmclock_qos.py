@@ -3,6 +3,7 @@ from teuthology.exceptions import CommandFailedError
 from pathlib import Path
 import logging
 import time
+import random
 
 log = logging.getLogger(__name__)
 
@@ -120,13 +121,24 @@ class TestMDSDmclockQoS(CephFSTestCase):
         else:
             mount.mount(cephfs_mntpt=self.get_subvolume_path(self.subvolumes[1]))
 
-    def set_qos_xattr(self, mount, reservation, limit, weight):
+    def set_qos_xattr(self, mount, reservation, weight, limit):
         from os import getuid, getgid
         mount.run_shell(['sudo', 'chown', "{0}:{1}".format(getuid(), getgid()), mount.hostfs_mntpt])
 
         mount.setfattr(mount.hostfs_mntpt, "ceph.dmclock.mds_reservation", str(reservation))
         mount.setfattr(mount.hostfs_mntpt, "ceph.dmclock.mds_limit", str(limit))
         mount.setfattr(mount.hostfs_mntpt, "ceph.dmclock.mds_weight", str(weight))
+
+    def verify_qos_info(self, mount, reservation, weight, limit):
+        for id in self.fs.mds_ids:
+            stat_qos = self.dump_qos(id)
+            for info in stat_qos[1]:
+                self.assertIn("volume_id", info)
+                if info["volume_id"] == str(self.get_subvolume_root(mount)):
+                    self.assertEqual(info["reservation"], reservation)
+                    self.assertEqual(info["weight"], weight)
+                    self.assertEqual(info["limit"], limit)
+
 
     def dump_qos(self, id=None, ignore=["session_cnt", "session_list", "inflight_requests"]):
         """
@@ -259,6 +271,104 @@ class TestMDSDmclockQoS(CephFSTestCase):
                 self.assertEqual(info["limit"], limit)
                 self.assertEqual(info["weight"], weight)
 
+    def test_update_random_qos_value_subvolume(self):
+        """
+        Update qos 3 values using setfattr.
+        Check its result via dump qos.
+        """
+        log.info(self.fs.is_mds_qos())
+        self.enable_qos()
+
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_b))
+
+        for it in range(1, 20):
+            reservation_a = random.randrange(1, 1000)
+            weight_a = random.randrange(1, 1000)
+            limit_a = random.randrange(1, 1000)
+            self.set_qos_xattr(self.mount_a, reservation_a, weight_a, limit_a)
+
+            reservation_b = random.randrange(1, 1000)
+            weight_b = random.randrange(1, 1000)
+            limit_b = random.randrange(1, 1000)
+            self.set_qos_xattr(self.mount_b, reservation_b, weight_b, limit_b)
+
+            time.sleep(1)
+
+            self.verify_qos_info(self.mount_a, reservation_a, weight_a, limit_a)
+            self.verify_qos_info(self.mount_b, reservation_b, weight_b, limit_b)
+
+    def test_verify_qos_value_on_cache_miss(self):
+        """
+        Update qos 3 values using setfattr.
+        Check its result via dump qos on cache misses.
+        """
+        log.info(self.fs.is_mds_qos())
+        self.enable_qos()
+
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+
+        reservation_a = random.randrange(1, 1000)
+        weight_a = random.randrange(1, 1000)
+        limit_a = random.randrange(1, 1000)
+        self.set_qos_xattr(self.mount_a, reservation_a, weight_a, limit_a)
+
+        time.sleep(1)
+
+        self.verify_qos_info(self.mount_a, reservation_a, weight_a, limit_a)
+
+        self.mount_a.umount_wait()
+        self.mount_a.mount(cephfs_mntpt="/")
+
+        log.info(self.mount_a.hostfs_mntpt)
+        sub_ino = self.mount_a.path_to_ino("volumes/_nogroup/subvolume_0")
+        log.info(f"/volumes/_nogroup/subvolume_0 inode {sub_ino}")
+
+        nogroup_ino = self.mount_a.path_to_ino("volumes/_nogroup")
+        log.info(f"/volumes/_nogroup inode {nogroup_ino}")
+
+        self.mount_a.umount_wait()
+
+        self.mds_asok_all(["config", "set", "mds_cache_memory_limit", str(1024)])
+
+        results = [0]
+        import threading
+        thread = threading.Thread(target=workload_create_files, args=(0, self.mount_b, 1000, results))
+
+        log.info("IO Testing...")
+
+        thread.start()
+        thread.join()
+
+        self.mount_b.umount_wait()
+
+        while (self.fs.mds_asok(['dump', 'inode', str(sub_ino)], mds_id='a') is not None or
+               self.fs.mds_asok(['dump', 'inode', str(sub_ino)], mds_id='b') is not None or
+               self.fs.mds_asok(['dump', 'inode', str(nogroup_ino)], mds_id='a') is not None or
+               self.fs.mds_asok(['dump', 'inode', str(nogroup_ino)], mds_id='b') is not None):
+            self.mds_asok_all(["flush", "journal"])
+            self.mds_asok_all(["flush_path", "/volumes/_nogroup"])
+            time.sleep(10)
+
+        self.assertIsNone(self.fs.mds_asok(['dump', 'inode', str(sub_ino)], mds_id='a'))
+        self.assertIsNone(self.fs.mds_asok(['dump', 'inode', str(sub_ino)], mds_id='b'))
+
+        self.assertIsNone(self.fs.mds_asok(['dump', 'inode', str(nogroup_ino)], mds_id='a'))
+        self.assertIsNone(self.fs.mds_asok(['dump', 'inode', str(nogroup_ino)], mds_id='b'))
+
+        self.mount_a.mount(cephfs_mntpt=str(self.get_subvolume_root(self.mount_a)))
+
+        self.verify_qos_info(self.mount_a, reservation_a, weight_a, limit_a)
+
+        self.mount_a.umount_wait()
+
+        self.fs.mds_restart()
+        self.fs.wait_for_daemons()
+        log.info(str(self.mds_cluster.status()))
+
+        self.mount_a.mount(cephfs_mntpt=str(self.get_subvolume_root(self.mount_a)))
+        self.verify_qos_info(self.mount_a, reservation_a, weight_a, limit_a)
+
     def test_update_qos_value_dir(self):
         """
         Update qos 3 values using setfattr.
@@ -342,10 +452,20 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.enable_qos()
 
         self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
-        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_a))
-
         reservation, weight, limit = 50, 50, 50
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
+
+        self.assertEqual(
+                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation"))),
+                reservation)
+        self.assertEqual(
+                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight"))),
+                weight)
+        self.assertEqual(
+                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))),
+                limit)
+
+        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_a))
 
         # check remote vxattr
         self.assertEqual(
