@@ -918,6 +918,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
   }
 
   if (in->is_dir()) {
+    in->dmclock_info = st->dmclock_info;
     if (new_version || (new_issued & CEPH_CAP_FILE_SHARED)) {
       in->dirstat = st->dirstat;
     }
@@ -12245,6 +12246,32 @@ size_t Client::_vxattrcb_quota_max_files(Inode *in, char *val, size_t size)
   return snprintf(val, size, "%lld", (long long int)in->quota.max_files);
 }
 
+bool Client::_vxattrcb_dmclock_exists(Inode *in)
+{
+  return in->dmclock_info.mds_reservation > 0.0 || in->dmclock_info.mds_weight > 0.0 ||
+	 in->dmclock_info.mds_limit > 0.0;
+}
+size_t Client::_vxattrcb_dmclock(Inode *in, char *val, size_t size)
+{
+  bool qos_enabled = (in->dmclock_info.mds_reservation > 0.0 &&
+		      in->dmclock_info.mds_limit > 0.0 &&
+		      in->dmclock_info.mds_weight > 0.0);
+  return snprintf(val, size, "dmclock_mds_qos=%s", (qos_enabled) ? "enabled" : "disabled");
+}
+size_t Client::_vxattrcb_dmclock_mds_reservation(Inode* in, char *val, size_t size)
+{
+  return snprintf(val, size, "%f", in->dmclock_info.mds_reservation);
+}
+size_t Client::_vxattrcb_dmclock_mds_weight(Inode* in, char *val, size_t size)
+{
+  return snprintf(val, size, "%f", in->dmclock_info.mds_weight);
+}
+size_t Client::_vxattrcb_dmclock_mds_limit(Inode* in, char *val, size_t size)
+{
+  return snprintf(val, size, "%f", in->dmclock_info.mds_limit);
+}
+
+
 bool Client::_vxattrcb_layout_exists(Inode *in)
 {
   return in->layout != file_layout_t();
@@ -12406,6 +12433,16 @@ size_t Client::_vxattrcb_mirror_info(Inode *in, char *val, size_t size)
   flags: 0,                                                     \
 }
 
+#define XATTR_DMCLOCK_FIELD(_type, _name)		                \
+{								\
+  name: CEPH_XATTR_NAME(_type, _name),			        \
+  getxattr_cb: &Client::_vxattrcb_ ## _type ## _ ## _name,	\
+  readonly: false,						\
+  hidden: false,							\
+  exists_cb: &Client::_vxattrcb_dmclock_exists,			\
+  flags: 0,                                                     \
+}
+
 const Client::VXattr Client::_dir_vxattrs[] = {
   {
     name: "ceph.dir.layout",
@@ -12458,6 +12495,17 @@ const Client::VXattr Client::_dir_vxattrs[] = {
     exists_cb: &Client::_vxattrcb_mirror_info_exists,
     flags: 0,
   },
+  {
+    name: "ceph.dmclock",
+    getxattr_cb: &Client::_vxattrcb_dmclock,
+    readonly: false,
+    hidden: false,
+    exists_cb: &Client::_vxattrcb_dmclock_exists,
+    flags: 0,
+  },
+  XATTR_DMCLOCK_FIELD(dmclock, mds_reservation),
+  XATTR_DMCLOCK_FIELD(dmclock, mds_weight),
+  XATTR_DMCLOCK_FIELD(dmclock, mds_limit),
   { name: "" }     /* Required table terminator */
 };
 
