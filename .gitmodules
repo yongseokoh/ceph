@@ -46,8 +46,7 @@
 	url = https://github.com/ceph/rapidjson
 [submodule "src/dmclock"]
 	path = src/dmclock
-	url = https://github.com/yongseokoh/dmclock.git
-	branch = mds-dmclock-master
+	url = https://github.com/ceph/dmclock.git
 [submodule "src/seastar"]
 	path = src/seastar
 	url = https://github.com/ceph/seastar.git
