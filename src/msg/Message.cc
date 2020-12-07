@@ -175,6 +175,7 @@
 #include "messages/MDentryLink.h"
 
 #include "messages/MHeartbeat.h"
+#include "messages/MDSDmclockQoS.h"
 
 #include "messages/MMDSTableRequest.h"
 #include "messages/MMDSMetrics.h"
@@ -855,6 +856,10 @@ Message *decode_message(CephContext *cct,
 
   case MSG_MDS_PING:
     m = make_message<MMDSPing>();
+    break;
+
+  case MSG_MDS_DMCLOCK_QOS:
+    m = MDSDmclockQoS::create();
     break;
 
   case MSG_MGR_BEACON:

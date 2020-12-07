@@ -196,6 +196,8 @@
 #define MSG_MDS_PING               0x502  // for mds pinger
 #define MSG_MDS_SCRUB_STATS        0x503  // for mds scrub stack
 
+#define MSG_MDS_DMCLOCK_QOS               0x501
+
 // *** generic ***
 #define MSG_TIMECHECK             0x600
 #define MSG_MON_HEALTH            0x601
