@@ -510,6 +510,15 @@ OPTION(mds_damage_table_max_entries, OPT_INT)
 // Maximum increment for client writable range, counted by number of objects
 OPTION(mds_client_writeable_range_max_inc_objs, OPT_U32)
 
+//
+OPTION(mds_dmclock_mds_qos_enable, OPT_BOOL)
+//
+OPTION(mds_dmclock_mds_qos_default_reservation, OPT_FLOAT)
+//
+OPTION(mds_dmclock_mds_qos_default_weight, OPT_FLOAT)
+//
+OPTION(mds_dmclock_mds_qos_default_limit, OPT_FLOAT)
+
 // verify backend can support configured max object name length
 OPTION(osd_check_max_object_name_len_on_startup, OPT_BOOL)
 

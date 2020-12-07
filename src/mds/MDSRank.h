@@ -41,6 +41,7 @@
 #include "Server.h"
 #include "MetricsHandler.h"
 #include "osdc/Journaler.h"
+#include "MDSDmclockScheduler.h"
 
 // Full .h import instead of forward declaration for PerfCounter, for the
 // benefit of those including this header and using MDSRank::logger
@@ -138,6 +139,7 @@ class MgrClient;
 class Finisher;
 class ScrubStack;
 class C_ExecAndReply;
+class MDSDmclockScheduler;
 
 /**
  * The public part of this class's interface is what's exposed to all
@@ -182,6 +184,7 @@ class MDSRank {
     }
 
     bool is_daemon_stopping() const;
+
 
     MDSTableClient *get_table_client(int t);
     MDSTableServer *get_table_server(int t);
@@ -387,7 +390,9 @@ class MDSRank {
     SnapServer *snapserver = nullptr;
     SnapClient *snapclient = nullptr;
 
-    SessionMap sessionmap;
+    SessionMap sessionmap
+
+    MDSDmclockScheduler *mds_dmclock_scheduler = nullptr;
 
     PerfCounters *logger = nullptr, *mlogger = nullptr;
     OpTracker op_tracker;
