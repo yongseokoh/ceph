@@ -4774,7 +4774,7 @@ public:
 	in->make_path_string(path, true);
       }
 
-      mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path);
+      mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path, in->get_projected_inode()->dmclock_info);
     }
   }
 };
@@ -5824,11 +5824,6 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
 
       // Update dmclock's client_info_map
       update_dmclock = new_info.is_valid();
-      if (update_dmclock) {
-        // TODO: Update update_volume_info to use dmclock_info_t
-        ClientInfo client_info(new_info.mds_reservation, new_info.mds_weight, new_info.mds_limit);
-        mds->mds_dmclock_scheduler->update_volume_info(path, client_info, false);
-      }
 
       mdr->no_early_reply = true;
       pip = pi.inode.get();
