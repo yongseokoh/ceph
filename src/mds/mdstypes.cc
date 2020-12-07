@@ -175,6 +175,22 @@ ostream& operator<<(ostream &out, const nest_info_t &n)
 }
 
 /*
+ * dmclock_info_t
+ * */
+void dmclock_info_t::dump(Formatter *f) const
+{
+  f->dump_float("dmclock_mds_reservation", mds_reservation);
+  f->dump_float("dmclock_mds_limit", mds_limit);
+  f->dump_float("dmclock_mds_weight", mds_weight);
+}
+
+void dmclock_info_t::generate_test_instances(list<dmclock_info_t *>& ls)
+{
+  ls.push_back(new dmclock_info_t);
+  ls.push_back(new dmclock_info_t);
+}
+
+/*
  * quota_info_t
  */
 void quota_info_t::dump(Formatter *f) const

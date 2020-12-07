@@ -61,6 +61,10 @@
 #include <functional>
 
 #include "common/config.h"
+#include "MDSDmclockScheduler.h"
+
+#include "dmclock/src/dmclock_recs.h"
+
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mds
@@ -340,7 +344,7 @@ void Server::dispatch(const cref_t<Message> &m)
     handle_client_session(ref_cast<MClientSession>(m));
     return;
   case CEPH_MSG_CLIENT_REQUEST:
-    handle_client_request(ref_cast<MClientRequest>(m));
+    mds->mds_dmclock_scheduler->handle_mds_request(ref_cast<MClientRequest>(m));
     return;
   case CEPH_MSG_CLIENT_RECLAIM:
     handle_client_reclaim(ref_cast<MClientReclaim>(m));
@@ -835,6 +839,10 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
 	     << ", noop" << dendl;
     // close must have been canceled (by an import?), or any number of other things..
   } else if (open) {
+    if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
+      auto client_root_entry = session->info.client_metadata.find("root");
+      mds->mds_dmclock_scheduler->create_qos_info_from_xattr(client_root_entry->second);
+    }
     ceph_assert(session->is_opening());
     mds->sessionmap.set_state(session, Session::STATE_OPEN);
     mds->sessionmap.touch_session(session);
@@ -877,6 +885,10 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
         dout(7) << " client " << session->info.inst << " was last reclaimed, finishing" << dendl;
 	mds->maybe_clientreplay_done();
       }
+    }
+
+    if (mds->mds_dmclock_scheduler->get_default_conf().is_enabled() == true) {
+      mds->mds_dmclock_scheduler->delete_qos_info_by_session(session);
     }
     
     if (session->is_closing()) {
@@ -2127,6 +2139,8 @@ void Server::reply_client_request(MDRequestRef& mdr, const ref_t<MClientReply> &
   ceph_assert(mdr.get());
   const cref_t<MClientRequest> &req = mdr->client_request;
   
+  mds->mds_dmclock_scheduler->invoke_request_completed();
+
   dout(7) << "reply_client_request " << reply->get_result()
 	   << " (" << cpp_strerror(reply->get_result())
 	   << ") " << *req << dendl;
@@ -4740,12 +4754,12 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
  */
 class C_MDS_inode_update_finish : public ServerLogContext {
   CInode *in;
-  bool truncating_smaller, changed_ranges, adjust_realm;
+  bool truncating_smaller, changed_ranges, adjust_realm, update_dmclock;
 public:
   C_MDS_inode_update_finish(Server *s, MDRequestRef& r, CInode *i,
-			    bool sm=false, bool cr=false, bool ar=false) :
+			    bool sm=false, bool cr=false, bool nr=false, bool ud=false) :
     ServerLogContext(s, r), in(i),
-    truncating_smaller(sm), changed_ranges(cr), adjust_realm(ar) { }
+    truncating_smaller(sm), changed_ranges(cr), new_realm(nr), update_dmclock(ud) { }
   void finish(int r) override {
     ceph_assert(r == 0);
 
@@ -4773,6 +4787,17 @@ public:
 
     if (changed_ranges)
       get_mds()->locker->share_inode_max_size(in);
+
+    if (update_dmclock) {
+      string path; 
+      if (in->is_root()) {
+	path = "/";
+      } else {
+	in->make_path_string(path, true);
+      }
+
+      mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path);
+    }
   }
 };
 
@@ -5549,6 +5574,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
   }
 
   bool adjust_realm = false;
+  bool update_dmclock = false;
   if (name.compare(0, 15, "ceph.dir.layout") == 0) {
     if (!cur->is_dir()) {
       respond_to_request(mdr, -EINVAL);
@@ -5753,6 +5779,66 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
     auto pi = cur->project_inode(mdr);
     cur->setxattr_ephemeral_dist(val);
     pip = pi.inode.get();
+  } else if (name.find("ceph.dmclock") == 0) {
+
+    if (!cur->is_dir()) {
+      respond_to_request(mdr, -EINVAL);
+      return;
+    }
+
+    double value_;
+    try {
+      value_ = boost::lexical_cast<double>(value);
+    } catch (boost::bad_lexical_cast const&) {
+      dout(10) << "bad ceph.dmclock vxattr value, unable to cast int for " << name << dendl;
+      respond_to_request(mdr, -EINVAL);
+    }
+
+    size_t pos = name.find("mds_");
+    auto &pi = cur->project_inode();
+
+    if (pos != std::string::npos) {
+
+      const string type = name.substr(pos + 4);
+      double reservation, weight, limit;
+      auto dmclock = mds->mds_dmclock_scheduler;
+
+      string path; 
+      if (cur->is_root()) {
+	path = "/";
+      } else {
+	cur->make_path_string(path, true);
+      }
+
+      if (type == "reservation") {
+	pi.inode.dmclock_info.mds_reservation = value_;
+	reservation = value_;
+	weight = pi.inode.dmclock_info.mds_weight;
+	limit = pi.inode.dmclock_info.mds_limit;
+      } else if (type == "weight") {
+	pi.inode.dmclock_info.mds_weight = value_;
+	reservation = pi.inode.dmclock_info.mds_reservation;
+	weight = value_;
+	limit = pi.inode.dmclock_info.mds_limit;
+      } else if (type == "limit") {
+	pi.inode.dmclock_info.mds_limit = value_;
+	reservation = pi.inode.dmclock_info.mds_reservation;
+	weight = pi.inode.dmclock_info.mds_weight;
+	limit = value_;
+      } else {
+	respond_to_request(mdr, -EINVAL);
+	return;
+      }
+      
+      // Update dmclock's client_info_map
+      update_dmclock = (reservation > 0.0 && weight > 0.0 && limit > 0.0);
+      if (update_dmclock) {
+        dmclock->update_volume_info(path, reservation, weight, limit, false);
+      }
+    }
+
+    mdr->no_early_reply = true;
+    pip = pi.inode.get();
   } else {
     dout(10) << " unknown vxattr " << name << dendl;
     respond_to_request(mdr, -EINVAL);
@@ -5776,7 +5862,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
   mdcache->journal_dirty_inode(mdr.get(), &le->metablob, cur);
 
   journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(this, mdr, cur,
-								   false, false, adjust_realm));
+								   false, false, adjust_realm, update_dmclock));
   return;
 }
 
@@ -5831,6 +5917,47 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur)
     // the rmxattr request to do this.
     handle_set_vxattr(mdr, cur);
     return;
+  } else if (name.find("ceph.dmclock") == 0) {
+
+    if (!cur->is_dir()) {
+      respond_to_request(mdr, -EINVAL);
+      return;
+    }
+    
+    auto &pi = cur->project_inode();
+    string path;
+    cur->make_path_string(path, true);
+
+    size_t pos = name.find("mds_");
+    if (pos != std::string::npos) {
+
+      const string type = name.substr(pos + 4);
+
+      if (type == "reservation") {
+	pi.inode.dmclock_info.mds_reservation = 0;
+      } else if (type == "weight") {
+	pi.inode.dmclock_info.mds_weight = 0;
+      } else if (type == "limit") {
+	pi.inode.dmclock_info.mds_limit = 0;
+      }
+      pi.inode.version = cur->pre_dirty();
+
+      mds->mds_dmclock_scheduler->set_default_volume_info(path);
+      mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path);
+
+    // log + wait
+      mdr->ls = mdlog->get_current_segment();
+      EUpdate *le = new EUpdate(mdlog, "remove dmclock vxattr");
+      mdlog->start_entry(le);
+      le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
+      mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0, PREDIRTY_PRIMARY);
+      mdcache->journal_dirty_inode(mdr.get(), &le->metablob, cur);
+
+      mdr->no_early_reply = true;
+      journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(this, mdr, cur));
+
+      return ;
+    }
   }
 
   respond_to_request(mdr, -ENODATA);
