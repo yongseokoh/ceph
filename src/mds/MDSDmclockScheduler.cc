@@ -323,31 +323,20 @@ void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
   dout(10) << __func__ << " volume_id " << vid << " session_id " << sid <<  dendl;
 
   if (check_volume_info_existence(vid) == false) {
-    CInode *in = read_xattrs(vid);
-    auto pip = in->get_projected_inode();
-
-    bool qos_valid = (in &&
-                      pip->dmclock_info.mds_reservation > 0.0 &&
-                      pip->dmclock_info.mds_weight > 0.0 &&
-                      pip->dmclock_info.mds_limit > 0.0);
-
     ClientInfo client_info(0.0, 0.0, 0.0);
     bool use_default = true;
 
-    if (in && qos_valid) {
-      client_info.update(pip->dmclock_info.mds_reservation,
-                  pip->dmclock_info.mds_weight,
-                  pip->dmclock_info.mds_limit);
-      use_default = false;
-    }
-
     create_volume_info(vid, client_info, use_default);
+
+    auto qos_msg = make_message<MDSDmclockQoS>(mds->get_nodeid(), convert_subvol_root(vid),
+        dmclock_info_t(), MDSDmclockQoS::PATH_TRAVERSE);
+    mds->send_message_mds(qos_msg, mds->get_nodeid());
   } 
 
   add_session_to_volume_info(vid, sid);
 }
 
-void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid)
+void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid, const dmclock_info_t &dmclock_info)
 {
   dout(10) << __func__ << " volume_id " << vid <<  dendl;
 
@@ -356,21 +345,13 @@ void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid)
     return;
   }
 
-  CInode *in = read_xattrs(vid);
-  auto pip = in->get_projected_inode();
-
-  bool qos_valid = (in &&
-                    pip->dmclock_info.mds_reservation > 0.0 &&
-		    pip->dmclock_info.mds_weight > 0.0 &&
-		    pip->dmclock_info.mds_limit > 0.0);
-
   ClientInfo info(0.0, 0.0, 0.0);
   bool use_default = true;
 
-  if (in && qos_valid) {
-    info.update(pip->dmclock_info.mds_reservation,
-                pip->dmclock_info.mds_weight,
-                pip->dmclock_info.mds_limit);
+  if (dmclock_info.is_valid()) {
+    info.update(dmclock_info.mds_reservation,
+                dmclock_info.mds_weight,
+                dmclock_info.mds_limit);
     use_default = false;
   }
 
@@ -389,7 +370,7 @@ void MDSDmclockScheduler::delete_qos_info_by_session(Session *session)
   delete_session_from_volume_info(vid, sid);
 }
 
-void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& vid)
+void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& vid, const dmclock_info_t &dmclock_info)
 {
   dout(10) << __func__ << " volume_id " << vid << " from " << mds->get_nodeid() << dendl;
 
@@ -397,26 +378,105 @@ void MDSDmclockScheduler::broadcast_qos_info_update_to_mds(const VolumeId& vid)
   mds->get_mds_map()->get_active_mds_set(actives);
 
   for (auto it : actives) {
-    if (mds->get_nodeid() == it) {
-      continue;
-    }
     dout(10) << " send MDSDmclockQoS message (" << vid  << ") to MDS" << it << dendl;
-    auto qos_msg = make_message<MDSDmclockQoS>(convert_subvol_root(vid));
+    auto qos_msg = make_message<MDSDmclockQoS>(mds->get_nodeid(), convert_subvol_root(vid),
+                                              dmclock_info, MDSDmclockQoS::BROADCAST_TO_ALL);
     mds->send_message_mds(qos_msg, it);
   }
 }
 
+CInode *MDSDmclockScheduler::traverse_path_inode(const cref_t<MDSDmclockQoS> &m)
+{
+  CF_MDS_RetryMessageFactory cf(mds, m);
+  MDRequestRef null_ref;
+  int flags = MDS_TRAVERSE_DISCOVER;
+  const filepath refpath(m->get_volume_id());
+  vector<CDentry*> trace;
+  CInode *in;
+
+  int r = mds->mdcache->path_traverse(null_ref, cf, refpath, flags, &trace, &in);
+  if (r > 0) {
+    dout(5) << __func__ << " path_traverse() returns " << r << dendl;
+    return nullptr;
+  }
+  if (r < 0) {
+    dout(7) << "failed to discover or not dir " << m->get_volume_id() << ", NAK" << dendl;
+    ceph_abort();
+  }
+  return in;
+}
+
 void MDSDmclockScheduler::handle_qos_info_update_message(const cref_t<MDSDmclockQoS> &m)
 {
-  dout(10) << __func__ << " volume_id " << m->get_volume_id() << dendl;
+  dmclock_info_t dmclock_info;
+  CInode *in;
+
+  dout(10) << __func__ << " message " << m->get_sub_op_str() << " from " << m->get_mds_from()
+    << " volume_id " << m->get_volume_id() << dendl;
 
   assert(mds_is_locked_by_me());
 
-  if (check_volume_info_existence(m->get_volume_id()) == true) {
-    update_qos_info_from_xattr(m->get_volume_id());
-  } else {
-    dout(5) << " MDS doesn't maintain client info for volume_id " << m->get_volume_id() << dendl;
+  switch(m->get_sub_op()) {
+    case MDSDmclockQoS::REQUEST_TO_AUTH:
+    {
+      ceph_assert(mds->get_nodeid() != m->get_mds_from());
+
+      in = traverse_path_inode(m);
+      if (in == nullptr) {
+        return;
+      }
+      ceph_assert(in->is_auth());
+      dmclock_info = in->get_projected_inode()->dmclock_info;
+      auto qos_msg = make_message<MDSDmclockQoS>(mds->get_nodeid(), m->get_volume_id(),
+                                                dmclock_info, MDSDmclockQoS::BROADCAST_TO_ALL);
+      mds->send_message_mds(qos_msg, m->get_mds_from());
+
+      dout(15) << " inode is_auth " << in->is_auth() << " authority " << in->authority().first << dendl;
+      dout(15) << " auth dmclock_info reservation " << dmclock_info.mds_reservation
+          << " weight " << dmclock_info.mds_weight
+          << " limit " << dmclock_info.mds_limit << dendl;
+      return;
+    }
+    case MDSDmclockQoS::BROADCAST_TO_ALL:
+      dmclock_info = m->get_dmclock_info();
+      break;
+    case MDSDmclockQoS::PATH_TRAVERSE:
+    {
+      ceph_assert(mds->get_nodeid() == m->get_mds_from());
+
+      in = traverse_path_inode(m);
+      if (in == nullptr) {
+        return;
+      }
+
+      dmclock_info = in->get_projected_inode()->dmclock_info;
+
+      dout(15) << " inode is_auth " << in->is_auth() << " authority " << in->authority().first << dendl;
+      if (!in->is_auth()) {
+        dout(10) << __func__ << " request dmclock_info to MDS" << in->authority().first << dendl;
+        auto qos_msg = make_message<MDSDmclockQoS>(mds->get_nodeid(), m->get_volume_id(),
+                                                    dmclock_info_t(), MDSDmclockQoS::REQUEST_TO_AUTH);
+        mds->send_message_mds(qos_msg, in->authority().first);
+        return;
+      }
+      dout(20) << " found inode: " << *in << dendl;
+      break;
+    }
+    default:
+      dout(0) << __func__ << " unkown message type " << m->get_sub_op() << dendl;
+      ceph_abort();
   }
+
+  if (check_volume_info_existence(m->get_volume_id()) == false) {
+    dout(5) << " MDS doesn't maintain client info for volume_id " << m->get_volume_id() << dendl;
+    return;
+  }
+
+  dout(15) << " dmclock_info reservation " << dmclock_info.mds_reservation
+          << " weight " << dmclock_info.mds_weight
+          << " limit " << dmclock_info.mds_limit << dendl;
+
+  update_qos_info_from_xattr(m->get_volume_id(), dmclock_info);
 }
 
 void MDSDmclockScheduler::proc_message(const cref_t<Message> &m)
@@ -525,43 +585,6 @@ void MDSDmclockScheduler::process_request()
 void MDSDmclockScheduler::begin_schedule_thread()
 {
   scheduler_thread = std::thread([this](){process_request();});
-}
-
-CInode *MDSDmclockScheduler::read_xattrs(const VolumeId vid)
-{
-  CInode *in;
-
-  dout(10) << __func__ << " volume_id " << vid << dendl;
-
-  filepath path_(vid.c_str());
-  auto qos_msg = make_message<MDSDmclockQoS>(vid);
-  CF_MDS_RetryMessageFactory cf(mds, qos_msg);
-
-  if (vid != ROOT_VOLUME_ID) {
-    CInode *cur = mds->mdcache->get_inode(path_.get_ino());  //get base_ino
-    mds->mdcache->discover_path(cur, CEPH_NOSNAP, path_, NULL, false);	// must discover
-    if (mds->logger) mds->logger->inc(l_mds_traverse_discover);
-  }
-  else { // vid == "/"
-   // TODO
-    if (mds->get_nodeid() != mds->mdsmap->get_root()) {
-      mds->mdcache->discover_base_ino(MDS_INO_ROOT, cf.build(), mds->mdsmap->get_root());
-    }
-  }
-
-  MDRequestRef null_ref;
-
-  int flags = MDS_TRAVERSE_DISCOVER;
-  mds->mdcache->path_traverse(null_ref, cf, path_, flags, NULL, &in);
-
-  auto pip = in->get_projected_inode();
-
-  dout(20) << " found inode: " << pip << " version " << pip->version
-            << " dmclock_info reservation " << pip->dmclock_info.mds_reservation
-            << " weight " << pip->dmclock_info.mds_weight
-            << " limit " << pip->dmclock_info.mds_limit << dendl;
-
-  return in;
 }
 
 void MDSDmclockScheduler::enable_qos_feature()

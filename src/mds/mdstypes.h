@@ -330,7 +330,7 @@ struct dmclock_info_t
     decode(mds_weight, p);
     DECODE_FINISH(p);
   }
-  bool is_valid() {
+  bool is_valid() const {
     return mds_reservation > 0 && mds_limit > 0 && mds_weight > 0;
   }
   void dump(Formatter *f) const;
