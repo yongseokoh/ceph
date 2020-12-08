@@ -21,7 +21,7 @@
 
 MDSRank *mds= nullptr;
 
-TEST(MDSDmclockScheduler, ConDecon)
+TEST(MDSDmclockScheduler, SchedulerConstructor)
 {
   MDSDmclockScheduler *scheduler = new MDSDmclockScheduler(mds);
   delete scheduler;
@@ -42,7 +42,7 @@ TEST(MDSDmclockScheduler, ConDecon)
   delete scheduler;
 }
 
-TEST(MDSDmclockScheduler, ConfCheck)
+TEST(MDSDmclockScheduler, CephConfDmclockCheck)
 {
   g_ceph_context->_conf.set_val("debug mds", "0/20");
 
@@ -69,7 +69,7 @@ TEST(MDSDmclockScheduler, ConfCheck)
   delete scheduler;
 }
 
-TEST(MDSDmclockScheduler, GoodBasic)
+TEST(MDSDmclockScheduler, BasicTest)
 {
   MDSDmclockScheduler *scheduler = new MDSDmclockScheduler(mds);
 
@@ -77,7 +77,7 @@ TEST(MDSDmclockScheduler, GoodBasic)
   ASSERT_TRUE(scheduler->get_default_conf().is_enabled());
 
   SessionId sid = "10024";
-  VolumeId vid = "/";
+  VolumeId vid = "/volumes/_nogroup/subvol";
   VolumeInfo vi;
   {
     ClientInfo client_info(10.0, 20.0, 30.0);
@@ -144,7 +144,7 @@ TEST(MDSDmclockScheduler, VolumeSessionInfo)
   scheduler->enable_qos_feature();
 
   SessionId sid = "10024";
-  VolumeId vid = "/";
+  VolumeId vid = "/volumes/_nogroup/subvol";
   VolumeInfo vi;
 
   ClientInfo client_info(10.0, 20.0, 30.0);
@@ -205,7 +205,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
   scheduler->enable_qos_feature();
 
   /* nullptr session sanity check */
-  scheduler->create_qos_info_from_xattr(nullptr);
+  scheduler->add_session(nullptr);
   ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
 
   VolumeId vid = "/";
@@ -213,17 +213,17 @@ TEST(MDSDmclockScheduler, SessionSanity)
   scheduler->create_volume_info(vid, ClientInfo(100.0, 300.0, 400.0), false);
   Session *session = make_session(vid, 10000);
 
-  scheduler->create_qos_info_from_xattr(session);
+  scheduler->add_session(session);
   ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
   ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
   ASSERT_EQ(vi.get_session_cnt(), 1);
 
-  scheduler->delete_qos_info_by_session(session);
+  scheduler->remove_session(session);
   ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
   ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
 
   /* duplicate */
-  scheduler->delete_qos_info_by_session(session);
+  scheduler->remove_session(session);
   put_session(session);
 
   VolumeId mount_root_path = "/volumes/_nogroup/4c55ad20-9c44-4a5e-9233-8ac64340b98c/subdir";
@@ -231,12 +231,12 @@ TEST(MDSDmclockScheduler, SessionSanity)
   scheduler->create_volume_info(subvol_root_path, ClientInfo(100.0, 300.0, 400.0), false);
   session = make_session(mount_root_path, 10000);
 
-  scheduler->create_qos_info_from_xattr(session);
+  scheduler->add_session(session);
   ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
   ASSERT_TRUE(scheduler->copy_volume_info(subvol_root_path, vi));
   ASSERT_EQ(vi.get_session_cnt(), 1);
 
-  scheduler->delete_qos_info_by_session(session);
+  scheduler->remove_session(session);
   ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
   ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
   put_session(session);
@@ -249,7 +249,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
   for (int i = 0; i < SESSION_NUM; i++) {
     session_a[i] = make_session(vid, 10000 + i);
-    scheduler->create_qos_info_from_xattr(session_a[i]);
+    scheduler->add_session(session_a[i]);
   }
   ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
   ASSERT_TRUE(scheduler->copy_volume_info(vid, vi)==true);
@@ -259,7 +259,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
     ASSERT_TRUE(scheduler->copy_volume_info(vid, vi));
     ASSERT_EQ(vi.get_session_cnt(), (SESSION_NUM - i));
     ASSERT_EQ(scheduler->get_volume_info_map().size(), 1);
-    scheduler->delete_qos_info_by_session(session_a[i]);
+    scheduler->remove_session(session_a[i]);
   }
 
   ASSERT_FALSE(scheduler->copy_volume_info(vid, vi));
@@ -280,7 +280,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
     for (int j = 0; j < SESSION_NUM; j++) {
       session_b[i][j] = make_session(vid_a[i], 10000 + j);
-      scheduler->create_qos_info_from_xattr(session_b[i][j]);
+      scheduler->add_session(session_b[i][j]);
     }
     ASSERT_TRUE(scheduler->copy_volume_info(vid_a[i], vi_a[i]));
     ASSERT_EQ(vi_a[i].get_session_cnt(), SESSION_NUM);
@@ -289,7 +289,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
 
   for (int i = 0; i < VOLUME_NUM; i++) {
     for (int j = 0; j < SESSION_NUM; j++) {
-      scheduler->delete_qos_info_by_session(session_b[i][j]);
+      scheduler->remove_session(session_b[i][j]);
     }
     ASSERT_FALSE(scheduler->copy_volume_info(vid_a[i], vi_a[i]));
   }
@@ -298,7 +298,7 @@ TEST(MDSDmclockScheduler, SessionSanity)
   /* nagative test: delete again */
   for (int i = 0; i < VOLUME_NUM; i++) {
     for (int j = 0; j < SESSION_NUM; j++) {
-      scheduler->delete_qos_info_by_session(session_b[i][j]);
+      scheduler->remove_session(session_b[i][j]);
     }
   }
   ASSERT_EQ(scheduler->get_volume_info_map().size(), 0);
@@ -325,9 +325,7 @@ Queue::HandleRequestFunc handle_request_f = [] /* &complete_count, &request_coun
 
 MDSDmclockScheduler *create_dmclock_scheduler()
 {
-
   MDSDmclockScheduler *scheduler = new MDSDmclockScheduler(mds, client_info_f, can_handle_f, handle_request_f);
-
   request_count = 0;
   complete_count = 0;
   return scheduler;
@@ -376,7 +374,6 @@ TEST(MDSDmclockScheduler, IssueClientRequest)
     scheduler->enqueue_client_request<MDSReqRef>(req, vid);
   }
 
-  /* TODO: schedule() function needs to be triggered  */
   scheduler->disable_qos_feature();
   cleanup_dmclock_scheduler(scheduler);
 
@@ -389,7 +386,7 @@ TEST(MDSDmclockScheduler, CancelClientRequest)
   scheduler->enable_qos_feature();
 
   SessionId sid = "23423";
-  VolumeId vid = "/";
+  VolumeId vid = "/volumes/_nogroup/subvol";
   bool use_default = false;
   ClientInfo client_info(10.0, 20.0, 30.0);
   scheduler->create_volume_info(vid, client_info, use_default);
@@ -414,7 +411,7 @@ TEST(MDSDmclockScheduler, IssueUpdateRequest)
   atomic_int update_count = 0;
 
   SessionId sid = "323423";
-  VolumeId vid = "/";
+  VolumeId vid = "/volumes/_nogroup/subvol";
   ClientInfo client_info(100.0, 200.0, 300.0);
   bool use_default = false;
   scheduler->create_volume_info(vid, client_info, use_default);
@@ -456,14 +453,14 @@ TEST(MDSDmclockScheduler, IssueUpdateRequest)
   ASSERT_EQ(update_count, (sync_total_count+async_total_count));
 }
 
-TEST(MDSDmclockScheduler, IssueMixRequest)
+TEST(MDSDmclockScheduler, IssueClientUpdateMixedRequest)
 {
   MDSDmclockScheduler *scheduler = create_dmclock_scheduler();
   scheduler->enable_qos_feature();
   atomic_int update_count = 0;
 
   SessionId sid = "33343";
-  VolumeId vid = "/";
+  VolumeId vid = "/volumes/_nogroup/subvol";
   ClientInfo client_info(100.0, 200.0, 300.0);
   bool use_default = false;
   scheduler->create_volume_info(vid, client_info, use_default);
