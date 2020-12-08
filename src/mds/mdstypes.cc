@@ -188,6 +188,9 @@ void dmclock_info_t::generate_test_instances(list<dmclock_info_t *>& ls)
 {
   ls.push_back(new dmclock_info_t);
   ls.push_back(new dmclock_info_t);
+  ls.back()->mds_reservation = 50;
+  ls.back()->mds_weight = 100;
+  ls.back()->mds_limit = 100;
 }
 
 ostream& operator<<(ostream &out, const dmclock_info_t &n)

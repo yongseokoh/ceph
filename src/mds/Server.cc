@@ -4783,15 +4783,8 @@ public:
       get_mds()->locker->share_inode_max_size(in);
 
     if (update_dmclock) {
-      string path; 
-      if (in->is_root()) {
-	path = "/";
-      } else {
-	in->make_path_string(path, true);
-      }
-
-      if (!(mds->is_active() || mds->is_stopping()))
-        return;
+      string path;
+      in->make_path_string(path, true);
 
       if (!in->is_auth() || in->is_frozen())
         return;
@@ -5844,19 +5837,18 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
 
       int r = parse_qos_vxattr(name, value, &new_info);
       if (r < 0) {
-	respond_to_request(mdr, r);
+        respond_to_request(mdr, r);
         return;
       }
 
       if (new_info == cur->get_projected_inode()->dmclock_info) {
-	respond_to_request(mdr, 0);
+        respond_to_request(mdr, 0);
         return;
       }
 
       auto pi = cur->project_inode(mdr);
       pi.inode->dmclock_info = new_info;
 
-      // Update dmclock's client_info_map
       update_dmclock = new_info.is_valid();
 
       mdr->no_early_reply = true;
@@ -5941,28 +5933,27 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur)
     // the rmxattr request to do this.
     handle_set_vxattr(mdr, cur);
     return;
-  } else if (name.find("ceph.dmclock") == 0) {
-
+  } else if (name.compare(0, 12, "ceph.dmclock") == 0) {
     if (!cur->is_dir()) {
       respond_to_request(mdr, -EINVAL);
       return;
     }
-    
+
     auto pi = cur->project_inode(mdr);
     string path;
     cur->make_path_string(path, true);
 
-    size_t pos = name.find("mds_");
-    if (pos != std::string::npos) {
+    if (name.find("mds_") != std::string::npos) {
 
-      const string type = name.substr(pos + 4);
-
-      if (type == "reservation") {
-	pi.inode->dmclock_info.mds_reservation = 0;
-      } else if (type == "weight") {
-	pi.inode->dmclock_info.mds_weight = 0;
-      } else if (type == "limit") {
-	pi.inode->dmclock_info.mds_limit = 0;
+      if (name == "ceph.dmclock.mds_reservation") {
+        pi.inode->dmclock_info.mds_reservation = 0;
+      } else if (name == "ceph.dmclock.mds_weight") {
+        pi.inode->dmclock_info.mds_weight = 0;
+      } else if (name == "ceph.dmclock.mds_limit") {
+        pi.inode->dmclock_info.mds_limit = 0;
+      } else {
+        dout(10) << " unknown vxattr to set up ceph.dmclock" << name << dendl;
+        respond_to_request(mdr, -EINVAL);
       }
       pi.inode->version = cur->pre_dirty();
 

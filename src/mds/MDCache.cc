@@ -10818,6 +10818,7 @@ void MDCache::decode_replica_inode(CInode *&in, bufferlist::const_iterator& p, C
     in->_decode_locks_state_for_replica(p, false);
     dout(10) << __func__ << " had " << *in << dendl;
   }
+
   if (dn) {
     if (!dn->get_linkage()->is_primary() || dn->get_linkage()->get_inode() != in)
       dout(10) << __func__ << " different linkage in dentry " << *dn << dendl;

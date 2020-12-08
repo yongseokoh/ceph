@@ -673,7 +673,7 @@ private:
 template<template<typename> class Allocator>
 void inode_t<Allocator>::encode(ceph::buffer::list &bl, uint64_t features) const
 {
-  ENCODE_START(16, 6, bl);
+  ENCODE_START(17, 6, bl);
 
   encode(ino, bl);
   encode(rdev, bl);
@@ -735,7 +735,7 @@ void inode_t<Allocator>::encode(ceph::buffer::list &bl, uint64_t features) const
 template<template<typename> class Allocator>
 void inode_t<Allocator>::decode(ceph::buffer::list::const_iterator &p)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(16, 6, 6, p);
+  DECODE_START_LEGACY_COMPAT_LEN(17, 6, 6, p);
 
   decode(ino, p);
   decode(rdev, p);
@@ -800,7 +800,7 @@ void inode_t<Allocator>::decode(ceph::buffer::list::const_iterator &p)
     backtrace_version = 0; // force update backtrace
   if (struct_v >= 11)
     decode(quota, p);
-  if (struct_v >= 16)
+  if (struct_v >= 17)
     decode(dmclock_info, p);
 
   if (struct_v >= 12) {
@@ -1018,7 +1018,7 @@ int inode_t<Allocator>::compare(const inode_t<Allocator> &other, bool *divergent
         file_data_version != other.file_data_version ||
         xattr_version != other.xattr_version ||
         backtrace_version != other.backtrace_version ||
-	!(dmclock_info == other.dmclock_info)) {
+        !(dmclock_info == other.dmclock_info)) {
       *divergent = true;
     }
     return 0;

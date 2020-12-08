@@ -12277,15 +12277,11 @@ size_t Client::_vxattrcb_quota_max_files(Inode *in, char *val, size_t size)
 
 bool Client::_vxattrcb_dmclock_exists(Inode *in)
 {
-  return in->dmclock_info.mds_reservation > 0.0 || in->dmclock_info.mds_weight > 0.0 ||
-	 in->dmclock_info.mds_limit > 0.0;
+  return in->dmclock_info.is_valid();
 }
 size_t Client::_vxattrcb_dmclock(Inode *in, char *val, size_t size)
 {
-  bool qos_enabled = (in->dmclock_info.mds_reservation > 0.0 &&
-		      in->dmclock_info.mds_limit > 0.0 &&
-		      in->dmclock_info.mds_weight > 0.0);
-  return snprintf(val, size, "dmclock_mds_qos=%s", (qos_enabled) ? "enabled" : "disabled");
+  return snprintf(val, size, "dmclock_mds_qos=%s", (in->dmclock_info.is_valid()) ? "enabled" : "disabled");
 }
 size_t Client::_vxattrcb_dmclock_mds_reservation(Inode* in, char *val, size_t size)
 {
