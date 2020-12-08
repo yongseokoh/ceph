@@ -52,8 +52,6 @@ using std::placeholders::_4;
 
 using Queue = crimson::dmclock::PushPriorityQueue<VolumeId, ClientRequest>;
 
-constexpr std::string_view ROOT_VOLUME_ID = "/";
-
 enum class RequestType {
   CLIENT_REQUEST,
   UPDATE_REQUEST
@@ -183,7 +181,7 @@ public:
     use_default = _use_default;
   }
 
-  void update_volume_info(const ClientInfo& client_info, const bool use_default)
+  void update(const ClientInfo& client_info, const bool use_default)
   {
     set_reservation(client_info.reservation);
     set_weight(client_info.weight);
@@ -307,9 +305,8 @@ public:
   void set_default_volume_info(const VolumeId &vid);
   void dump(Formatter *f) const;
 
-  void create_qos_info_from_xattr(Session *session);
-  void update_qos_info_from_xattr(const VolumeId &vid, const dmclock_info_t& dmclock_info);
-  void delete_qos_info_by_session(Session *session);
+  void add_session(Session *session);
+  void remove_session(Session *session);
 
   /* multi MDS broadcast message */
   void broadcast_qos_info_update_to_mds(const VolumeId& vid, const dmclock_info_t &dmclock_info);
@@ -389,8 +386,6 @@ public:
     default_conf.set_weight(g_conf().get_val<double>("mds_dmclock_weight"));
     default_conf.set_limit(g_conf().get_val<double>("mds_dmclock_limit"));
     default_conf.set_status(g_conf().get_val<bool>("mds_dmclock_enable"));
-
-    ceph_assert(ROOT_VOLUME_ID == "/");
   }
 
   MDSDmclockScheduler(MDSRank *m) :

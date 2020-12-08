@@ -249,7 +249,7 @@ void MDSDmclockScheduler::create_volume_info(const VolumeId &vid, const ClientIn
     ceph_assert(success==true);
     vi = &it->second;
   }
-  vi->update_volume_info(client_info, use_default);
+  vi->update(client_info, use_default);
 
   enqueue_update_request(vid);
 }
@@ -280,7 +280,7 @@ void MDSDmclockScheduler::delete_session_from_volume_info(const VolumeId &vid, c
       ceph_assert(vi->get_inflight_request()==0);
       volume_info_map.erase(it);
     }
-    /*TODO: delete client info in ClientRec, but dmclock supports only removal of idle clients */
+    /* the dmclock library supports only removal of idle clients in the backround */
   }
 }
 
@@ -292,7 +292,7 @@ void MDSDmclockScheduler::update_volume_info(const VolumeId &vid, const ClientIn
   
   VolumeInfo* vi = get_volume_info_ptr(vid);
   if (vi) {
-    vi->update_volume_info(client_info, use_default);
+    vi->update(client_info, use_default);
     enqueue_update_request(vid);
   } else {
     dout(5) << " VolumeInfo is unavaiable (vid = " << vid << ")" << dendl;
@@ -306,7 +306,7 @@ void MDSDmclockScheduler::set_default_volume_info(const VolumeId &vid)
   update_volume_info(vid, client_info, true);
 }
 
-void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
+void MDSDmclockScheduler::add_session(Session *session)
 {
   if (get_default_conf().is_enabled() == false) {
     return;
@@ -336,30 +336,7 @@ void MDSDmclockScheduler::create_qos_info_from_xattr(Session *session)
   add_session_to_volume_info(vid, sid);
 }
 
-void MDSDmclockScheduler::update_qos_info_from_xattr(const VolumeId &vid, const dmclock_info_t &dmclock_info)
-{
-  dout(10) << __func__ << " volume_id " << vid <<  dendl;
-
-  if (check_volume_info_existence(vid) == false) {
-    dout(5) << __func__ << " volume info (" << vid << ") is unavaiable" << dendl;
-    return;
-  }
-
-  ClientInfo info(0.0, 0.0, 0.0);
-  bool use_default = true;
-
-  if (dmclock_info.is_valid()) {
-    info.update(dmclock_info.mds_reservation,
-                dmclock_info.mds_weight,
-                dmclock_info.mds_limit);
-    use_default = false;
-  }
-
-  update_volume_info(vid, info, use_default);
-}
-
-
-void MDSDmclockScheduler::delete_qos_info_by_session(Session *session)
+void MDSDmclockScheduler::remove_session(Session *session)
 {
   if (get_default_conf().is_enabled() == false) {
     return;
@@ -476,7 +453,17 @@ void MDSDmclockScheduler::handle_qos_info_update_message(const cref_t<MDSDmclock
           << " weight " << dmclock_info.mds_weight
           << " limit " << dmclock_info.mds_limit << dendl;
 
-  update_qos_info_from_xattr(m->get_volume_id(), dmclock_info);
+  ClientInfo info(0.0, 0.0, 0.0);
+  bool use_default = true;
+
+  if (dmclock_info.is_valid()) {
+    info.update(dmclock_info.mds_reservation,
+                dmclock_info.mds_weight,
+                dmclock_info.mds_limit);
+    use_default = false;
+  }
+
+  update_volume_info(m->get_volume_id(), info, use_default);
 }
 
 void MDSDmclockScheduler::proc_message(const cref_t<Message> &m)
@@ -570,7 +557,6 @@ void MDSDmclockScheduler::process_request_handler()
 
     lock.lock();
   }
-
 }
 
 void MDSDmclockScheduler::process_request()
@@ -602,12 +588,12 @@ void MDSDmclockScheduler::enable_qos_feature()
 
   if (auto it = sessionmap->by_state.find(Session::STATE_OPEN); it != sessionmap->by_state.end()) {
     for (const auto &session : *(it->second)) {
-      create_qos_info_from_xattr(session);
+      add_session(session);
     }
   }
   if (auto it = sessionmap->by_state.find(Session::STATE_STALE); it != sessionmap->by_state.end()) {
     for (const auto &session : *(it->second)) {
-      create_qos_info_from_xattr(session);
+      add_session(session);
     }
   }
 }
@@ -674,13 +660,13 @@ void MDSDmclockScheduler::disable_qos_feature()
 
   if (auto it = sessionmap->by_state.find(Session::STATE_OPEN); it != sessionmap->by_state.end()) {
     for (const auto &session : *(it->second)) {
-      delete_qos_info_by_session(session);
+      remove_session(session);
     }
   }
 
   if (auto it = sessionmap->by_state.find(Session::STATE_STALE); it != sessionmap->by_state.end()) {
     for (const auto &session : *(it->second)) {
-      delete_qos_info_by_session(session);
+      remove_session(session);
     }
   }
 }
