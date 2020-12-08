@@ -93,6 +93,12 @@ class TestMDSDmclockQoS(CephFSTestCase):
         else:
             self.mds_asok_all(["config", "set", "mds_dmclock_enable", "false"])
 
+    def assertBetween(self, result, res, lim):
+        delta = 0.5  # TODO: find appropriate value
+
+        self.assertGreaterEqual(result, res * (1 - delta))
+        self.assertLessEqual(result, lim * (1 + delta))
+
     def is_equal_dict(self, a, b, ignore_key=[]):
         ignore_key = set(ignore_key)
         for key in a:
@@ -595,8 +601,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         stat_qos = self.dump_qos()
         log.info(stat_qos)
 
-        self.assertGreaterEqual(results[0], reservation * 0.9)
-        self.assertLessEqual(results[0], limit * 1.1)
+        self.assertBetween(results[0], reservation, limit)
 
     def test_qos_throttling_100(self):
         import threading
@@ -631,9 +636,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         stat_qos = self.dump_qos()
         log.info(stat_qos)
 
-        self.assertGreaterEqual(results[0], reservation * 0.9)
-        self.assertLessEqual(results[0], limit * 1.1)
-
+        self.assertBetween(results[0], reservation, limit)
 
     def test_qos_ratio(self):
         """
@@ -675,9 +678,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         stat_qos = self.dump_qos()
         log.info(stat_qos)
 
-        self.assertGreaterEqual(results[0] * 2, results[1] * 0.9)
-        self.assertLessEqual(results[0] * 2, results[1] * 1.1)
-
+        self.assertBetween(results[0] * 2, results[1], results[1])
 
 def workload_create_files(tid, mount, test_cnt, results):
     from os import path, mkdir
