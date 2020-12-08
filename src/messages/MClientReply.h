@@ -26,7 +26,6 @@
 
 #include "dmclock/src/dmclock_recs.h"
 
-
 /***
  *
  * MClientReply - container message for MDS reply to a client's MClientRequest
@@ -255,10 +254,10 @@ struct InodeStat {
         quota = quota_info_t{};
 
       if (features & CEPH_FEATURE_FS_QOS) {
-	decode(dmclock_info, p);
+        decode(dmclock_info, p);
       }
       else {
-	dmclock_info = dmclock_info_t{};
+        dmclock_info = dmclock_info_t{};
       }
 
       if ((features & CEPH_FEATURE_FS_FILE_LAYOUT_V2))

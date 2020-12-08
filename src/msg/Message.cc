@@ -176,7 +176,7 @@
 #include "messages/MDentryLink.h"
 
 #include "messages/MHeartbeat.h"
-#include "messages/MDSDmclockQoS.h"
+#include "messages/MMDSDmclockQoS.h"
 
 #include "messages/MMDSTableRequest.h"
 #include "messages/MMDSMetrics.h"

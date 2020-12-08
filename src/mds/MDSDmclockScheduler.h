@@ -29,7 +29,7 @@
 #include "messages/MClientReply.h"
 #include "messages/MClientRequest.h"
 #include "messages/MClientSession.h"
-#include "messages/MDSDmclockQoS.h"
+#include "messages/MMDSDmclockQoS.h"
 #include "msg/Messenger.h"
 #include "dmclock/src/dmclock_server.h"
 #include "CInode.h"
