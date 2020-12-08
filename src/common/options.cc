@@ -8565,15 +8565,15 @@ std::vector<Option> get_mds_options() {
      .set_long_description("This option can be configured when reservation, weight, and limit values are greater than zero."),
 
     Option("mds_dmclock_reservation", Option::TYPE_FLOAT, Option::LEVEL_DEV)
-     .set_default(10000)
+     .set_default(1000)
      .set_description("dmclock reservation for each MDS client"),
 
     Option("mds_dmclock_weight", Option::TYPE_FLOAT, Option::LEVEL_DEV)
-     .set_default(10000)
+     .set_default(1000)
      .set_description("dmclock weight for each MDS client"),
 
     Option("mds_dmclock_limit", Option::TYPE_FLOAT, Option::LEVEL_DEV)
-     .set_default(10000)
+     .set_default(1000)
      .set_description("dmclock limit for each MDS client"),
   });
 }
