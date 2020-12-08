@@ -116,7 +116,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         return Path(self.get_subvolume_path(self.subvolumes[1])).parent
 
-    def remount_subvolume_xattr_root(self, mount, mntpt):
+    def remount_to_mntpt(self, mount, mntpt):
         mount.umount_wait()
         mount.mount(cephfs_mntpt=str(mntpt))
 
@@ -149,7 +149,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
     def dump_qos(self, id=None, ignore=["session_cnt", "session_list", "inflight_requests"]):
         """
         Get dump qos from all active mds, and then compare the result for each voluem_id.
-        if dump qos results for each volume_id are different, assert it.
+        if dump qos results for each volume_id are different, assert error raises.
         """
         if id:
             return self.fs.mds_asok(["dump", "qos"], mds_id=id)
@@ -166,11 +166,11 @@ class TestMDSDmclockQoS(CephFSTestCase):
             for volume_qos in out:
                 self.assertIn("volume_id", volume_qos)
 
-                if volume_qos["volume_id"] in result:
+                if volume_qos["volume_id"] in result:  # all volume_id info from mdsss should be same.
                     self.assertTrue(self.is_equal_dict(volume_qos, result[volume_qos["volume_id"]], ignore_key=ignore))
                 result[volume_qos["volume_id"]] = volume_qos
 
-        return list(result.values())
+        return list(result.values())  # list of each volume_id info, [{"voluem_id": "/subvol", "reservation": 100,}, ...]
 
     def test_enable_qos(self):
         """
@@ -219,8 +219,8 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
     def test_update_qos_value_root_volume(self):
         """
-        Update qos 3 values to "/" using setfattr.
-        Check its result via getfattr
+        Negative Testcase
+        Try to update qos 3 values to "/" using setfattr.
         """
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
@@ -250,7 +250,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
 
         reservation, weight, limit = 100, 100, 100
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
@@ -285,8 +285,8 @@ class TestMDSDmclockQoS(CephFSTestCase):
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
-        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_b))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_b, self.get_subvolume_root(self.mount_b))
 
         for it in range(1, 20):
             reservation_a = random.randrange(1, 1000)
@@ -312,7 +312,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
 
         reservation_a = random.randrange(1, 1000)
         weight_a = random.randrange(1, 1000)
@@ -404,6 +404,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.assertIsNone(self.mount_a.getfattr(test_dir, "ceph.dmclock.mds_weight"))
 
     def test_mount_subdir_update_qos_value(self):
+        """
+        Test setfattr to subdir in subvolume.
+        """
         import threading
 
         self.enable_qos()
@@ -414,7 +417,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         reservation, weight, limit = 100, 100, 100
 
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
 
         # check updated vxattr using getfattr
@@ -440,10 +443,8 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         log.info("IO Testing...")
 
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+        thread.start()
+        thread.join()
 
         stat_qos = self.dump_qos()
         log.info(stat_qos)
@@ -457,7 +458,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
         log.info(self.fs.is_mds_qos())
         self.enable_qos()
 
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_b, self.get_subvolume_root(self.mount_a))
+
         reservation, weight, limit = 50, 50, 50
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
 
@@ -471,7 +474,6 @@ class TestMDSDmclockQoS(CephFSTestCase):
                 int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))),
                 limit)
 
-        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_a))
 
         # check remote vxattr
         self.assertEqual(
@@ -484,9 +486,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
                 int(float(self.mount_b.getfattr(self.mount_b.hostfs_mntpt, "ceph.dmclock.mds_limit"))),
                 limit)
 
-    def test_mixed_mds_different_default_values(self):
+    def test_pinning_each_rank_with_different_default_values(self):
         """
-        Test a situation with different QoS default valuse in between MDS.
+        Test a situation with different QoS default values in between MDS.
         """
         import threading
 
@@ -530,7 +532,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
     def test_mixed_mds(self):
         """
-        Test a situation which some mdss are  on QoS, others is not on QoS.
+        Test a situation which some mdss are with enabled QoS, others are with disabled QoS.
         """
         import threading
 
@@ -547,10 +549,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.mount_b.setfattr(self.mount_b.hostfs_mntpt, "ceph.dir.pin", str(1))  # pinning to QoS disabled MDS
 
         reservation, weight, limit = 25, 50, 50
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
         self.remount_subvolume_path_root(self.mount_a)
-
 
         threads = []
         results = [0, 0]
@@ -568,7 +569,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         self.assertLess(results[0], results[1])
 
-    def test_qos_throttling_50(self):
+    def test_qos_throttling_50IOPS(self):
         import threading
 
         log.info(self.fs.is_mds_qos())
@@ -579,7 +580,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(0))
 
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
         self.remount_subvolume_path_root(self.mount_a)
 
@@ -593,17 +594,15 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         log.info("IO Testing...")
 
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+        thread.start()
+        thread.join()
 
         stat_qos = self.dump_qos()
         log.info(stat_qos)
 
         self.assertBetween(results[0], reservation, limit)
 
-    def test_qos_throttling_100(self):
+    def test_qos_throttling_100IOPS(self):
         import threading
 
         log.info(self.fs.is_mds_qos())
@@ -614,7 +613,7 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dir.pin", str(0))
 
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
         self.remount_subvolume_path_root(self.mount_a)
 
@@ -628,10 +627,8 @@ class TestMDSDmclockQoS(CephFSTestCase):
 
         log.info("IO Testing...")
 
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+        thread.start()
+        thread.join()
 
         stat_qos = self.dump_qos()
         log.info(stat_qos)
@@ -649,11 +646,11 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.enable_qos()
 
         reservation, weight, limit = 100, 100, 100
-        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+        self.remount_to_mntpt(self.mount_a, self.get_subvolume_root(self.mount_a))
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
         self.remount_subvolume_path_root(self.mount_a)
 
-        self.remount_subvolume_xattr_root(self.mount_b, self.get_subvolume_root(self.mount_b))
+        self.remount_to_mntpt(self.mount_b, self.get_subvolume_root(self.mount_b))
         self.set_qos_xattr(self.mount_b, reservation*2, weight*2, limit*2)
         self.remount_subvolume_path_root(self.mount_b)
 
@@ -698,25 +695,4 @@ def workload_create_files(tid, mount, test_cnt, results):
 
     log.info("[Thread {0}]: {1} IOs in {2}secs, OPs/sec: {3}".format(
                 tid, test_cnt, elapsed_time, (test_cnt / elapsed_time)))
-
-
-def workload_create_nested_dirs(tid, base_path, TEST_DIR_COUNT, results):
-    from os import path, mkdir
-    import time
-
-    base = path.join(base_path, "thread_{0}".format(tid))
-    mkdir(base)
-
-    start = time.time()
-
-    for i in range(TEST_DIR_COUNT):
-        mkdir(path.join(base, "dir_{0}".format(i)))
-        for j in range(TEST_DIR_COUNT):
-            mkdir(path.join(base, "dir_{0}".format(i), "subdir_{0}".format(j)))
-
-    elapsed_time = time.time() - start
-
-    results[tid] = (TEST_DIR_COUNT ** 2) / elapsed_time
-    log.info("[Thread {0}]: mkdir {1} dirs in {2}secs, OPs/sec: {3}".format(
-                tid, TEST_DIR_COUNT ** 2, elapsed_time, (TEST_DIR_COUNT ** 2) / elapsed_time))
 
