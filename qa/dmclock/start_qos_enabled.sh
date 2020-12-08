@@ -1,9 +1,9 @@
 #!/bin/bash
 
 NUM_MDS=2
-VSTART_DEST=~/ceph/build MON=1 OSD=1 MDS=${NUM_MDS} ../src/vstart.sh -l -n -d -x --smallmds --without-dashboard --multimds ${NUM_MDS} 
+VSTART_DEST=/ceph/build MON=1 OSD=1 MDS=${NUM_MDS} ../src/vstart.sh -l -n -d -x --smallmds --without-dashboard --multimds ${NUM_MDS} 
 
-BUILD_PATH=~/ceph/build
+BUILD_PATH=/ceph/build
 R=5000
 W=5000
 L=5000
