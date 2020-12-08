@@ -26,6 +26,7 @@
 
 #include "messages/MCacheExpire.h"
 #include "messages/MClientQuota.h"
+#include "messages/MClientQoS.h"
 #include "messages/MClientRequest.h"
 #include "messages/MClientSnap.h"
 #include "messages/MDentryLink.h"

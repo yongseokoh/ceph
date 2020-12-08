@@ -4790,6 +4790,24 @@ public:
 	in->make_path_string(path, true);
       }
 
+      if (!(mds->is_active() || mds->is_stopping()))
+        return;
+
+      if (!in->is_auth() || in->is_frozen())
+        return;
+
+      // sync client
+      auto dmclock_info = in->get_projected_inode()->dmclock_info;
+      for (auto &p : in->get_client_caps()) {
+        const Capability *cap = &p.second;
+        auto msg = make_message<MClientQoS>();
+        msg->ino = in->ino();
+        msg->dmclock_info = dmclock_info;
+
+        dout(20) << "send MClientQoS Message to client " << p.first << dendl;
+        mds->send_message_client_counted(msg, cap->get_session());
+      }
+
       mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path, in->get_projected_inode()->dmclock_info);
     }
   }
