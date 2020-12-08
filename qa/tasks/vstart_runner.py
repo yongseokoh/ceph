@@ -584,7 +584,7 @@ def safe_kill(pid):
     os.kill annoyingly raises exception if process already dead.  Ignore it.
     """
     try:
-        return os.system("sudo pkill -9 -P " + str(pid))
+        return os.kill(pid, signal.SIGKILL)
     except OSError as e:
         if e.errno == errno.ESRCH:
             # Raced with process termination
@@ -819,8 +819,8 @@ class LocalFuseMount(FuseMount):
 
         def list_connections():
             self.client_remote.run(
-                args=["sudo", "mount", "-t", "fusectl", "/sys/fs/fuse/connections", "/sys/fs/fuse/connections"],
-                check_status=False, omit_sudo=False
+                args=["mount", "-t", "fusectl", "/sys/fs/fuse/connections", "/sys/fs/fuse/connections"],
+                check_status=False
             )
 
             p = self.client_remote.run(args=["ls", "/sys/fs/fuse/connections"],
@@ -840,7 +840,7 @@ class LocalFuseMount(FuseMount):
         pre_mount_conns = list_connections()
         log.info("Pre-mount connections: {0}".format(pre_mount_conns))
 
-        cmdargs = ['sudo']
+        cmdargs = []
         if self.using_namespace:
             cmdargs = ['sudo', 'nsenter',
                        '--net=/var/run/netns/{0}'.format(self.netns_name),
