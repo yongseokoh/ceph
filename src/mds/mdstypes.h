@@ -342,6 +342,8 @@ inline bool operator==(const dmclock_info_t &l, const dmclock_info_t &r) {
   return memcmp(&l, &r, sizeof(l)) == 0;
 }
 
+std::ostream& operator<<(std::ostream &out, const dmclock_info_t &n);
+
 struct quota_info_t
 {
   void encode(ceph::buffer::list& bl) const {

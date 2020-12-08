@@ -35,6 +35,7 @@ class MClientCapRelease;
 class MClientCaps;
 class MClientLease;
 class MClientQuota;
+class MClientQoS;
 class MClientReclaim;
 class MClientReclaimReply;
 class MClientReconnect;
