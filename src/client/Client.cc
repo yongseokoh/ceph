@@ -53,6 +53,7 @@
 #include "messages/MClientCaps.h"
 #include "messages/MClientLease.h"
 #include "messages/MClientQuota.h"
+#include "messages/MClientQoS.h"
 #include "messages/MClientReclaim.h"
 #include "messages/MClientReclaimReply.h"
 #include "messages/MClientReconnect.h"
@@ -2674,6 +2675,9 @@ bool Client::ms_dispatch2(const MessageRef &m)
   case CEPH_MSG_CLIENT_QUOTA:
     handle_quota(ref_cast<MClientQuota>(m));
     break;
+  case CEPH_MSG_CLIENT_QOS:
+    handle_qos(ref_cast<MClientQoS>(m));
+    break;
 
   default:
     return false;
@@ -4971,6 +4975,31 @@ void Client::handle_snap(const MConstRef<MClientSnap>& m)
 	queue_cap_snap(in, p->second);
     }
     put_snap_realm(realm);
+  }
+}
+
+void Client::handle_qos(const MConstRef<MClientQoS>& m)
+{
+  mds_rank_t mds = mds_rank_t(m->get_source().num());
+
+  std::scoped_lock cl(client_lock);
+  MetaSession *session = _get_mds_session(mds, m->get_connection().get());
+  if (!session) {
+    return;
+  }
+
+  got_mds_push(session);
+
+  ldout(cct, 10) << __func__ << " " << *m << " from mds." << mds << dendl;
+
+  vinodeno_t vino(m->ino, CEPH_NOSNAP);
+  if (inode_map.count(vino)) {
+    Inode *in = NULL;
+    in = inode_map[vino];
+
+    if (in) {
+      in->dmclock_info = m->dmclock_info;
+    }
   }
 }
 
