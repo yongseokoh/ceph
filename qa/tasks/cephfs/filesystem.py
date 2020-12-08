@@ -342,8 +342,8 @@ class MDSCluster(CephCluster):
         """
         self.mds_daemons[mds_id].signal(sig, silent);
 
-    def newfs(self, name='cephfs', create=True, fs_config=None):
-        return Filesystem(self._ctx, name=name, create=create, fs_config=fs_config)
+    def newfs(self, name='cephfs', create=True):
+        return Filesystem(self._ctx, name=name, create=create)
 
     def status(self):
         return FSStatus(self.mon_manager)
