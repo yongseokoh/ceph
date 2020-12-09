@@ -21,7 +21,7 @@ function run_test() {
 
         ./start_qos_enabled.sh $2
 	
-        if ["$2" = true] ; then
+        if [[ "$2" == true ]]; then
             python ../qa/tasks/vstart_runner.py tasks.cephfs.${filename} --run-all-tests --enable-mds-qos
         else
             python ../qa/tasks/vstart_runner.py tasks.cephfs.${filename} --run-all-tests
