@@ -5010,6 +5010,7 @@ void Client::handle_qos(const MConstRef<MClientQoS>& m)
   std::scoped_lock cl(client_lock);
   MetaSession *session = _get_mds_session(mds, m->get_connection().get());
   if (!session) {
+    ldout(cct, 10) << __func__ << " " << *m << " no session" << mds << dendl;
     return;
   }
 
@@ -5024,6 +5025,9 @@ void Client::handle_qos(const MConstRef<MClientQoS>& m)
 
     if (in) {
       in->dmclock_info = m->dmclock_info;
+    }
+    else {
+      ldout(cct, 10) << __func__ << " " << "There is no inode in client" << dendl;
     }
   }
 }
