@@ -5,27 +5,7 @@ import logging
 import time
 import random
 
-#  log = logging.getLogger(__name__)
-
-def init_log():
-    global log
-    if log is not None:
-        del log
-    log = logging.getLogger(__name__)
-
-    global logpath
-    logpath = './qos.log'
-
-    handler = logging.FileHandler(logpath)
-    formatter = logging.Formatter(
-        fmt=u'%(asctime)s.%(msecs)03d %(levelname)s:%(name)s:%(message)s',
-        datefmt='%Y-%m-%dT%H:%M:%S')
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
-    log.setLevel(logging.INFO)
-
-log = None
-init_log()
+log = logging.getLogger(__name__)
 
 
 class TestMDSDmclockQoS(CephFSTestCase):
@@ -482,6 +462,9 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.remount_to_mntpt(self.mount_b, self.get_subvolume_root(self.mount_a))
 
         reservation, weight, limit = 50, 50, 50
+
+        self.set_qos_xattr(self.mount_a, reservation * 2, weight * 2, limit * 2)
+        self.set_qos_xattr(self.mount_b, reservation * 2, weight * 2, limit * 2)
         self.set_qos_xattr(self.mount_a, reservation, weight, limit)
 
         self.assertEqual(
@@ -494,7 +477,6 @@ class TestMDSDmclockQoS(CephFSTestCase):
                 int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))),
                 limit)
         time.sleep(10)
-
 
         # check remote vxattr
         self.assertEqual(
