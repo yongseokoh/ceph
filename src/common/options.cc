@@ -8557,7 +8557,24 @@ std::vector<Option> get_mds_options() {
      .set_default(2)
      .set_flag(Option::FLAG_RUNTIME)
      .set_description("interval in seconds for metrics data update.")
-     .set_long_description("interval in seconds after which active MDSs send client metrics data to rank 0.")
+     .set_long_description("interval in seconds after which active MDSs send client metrics data to rank 0."),
+
+    Option("mds_dmclock_enable", Option::TYPE_BOOL, Option::LEVEL_DEV)
+     .set_default(false)
+     .set_description("enable mds dmClock QoS scheduler")
+     .set_long_description("This option can be configured when reservation, weight, and limit values are greater than zero."),
+
+    Option("mds_dmclock_reservation", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(1000)
+     .set_description("dmclock reservation for each MDS client"),
+
+    Option("mds_dmclock_weight", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(1000)
+     .set_description("dmclock weight for each MDS client"),
+
+    Option("mds_dmclock_limit", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(1000)
+     .set_description("dmclock limit for each MDS client"),
   });
 }
 
