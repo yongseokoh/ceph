@@ -35,6 +35,10 @@
 #include "Mutation.h"
 #include "MDSContext.h"
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+#include<boost/algorithm/string.hpp>
+
 class OSDMap;
 class LogEvent;
 class EMetaBlob;
@@ -210,6 +214,7 @@ public:
 
   int parse_quota_vxattr(string name, string value, quota_info_t *quota);
   int parse_qos_vxattr(string name, string value, dmclock_info_t *info);
+  int tokenize_qos_vxattr(string name, string value, dmclock_info_t *info);
   void create_quota_realm(CInode *in);
   int parse_layout_vxattr(string name, string value, const OSDMap& osdmap,
 			  file_layout_t *layout, bool validate=true);
