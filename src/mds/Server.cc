@@ -5480,10 +5480,60 @@ int Server::parse_quota_vxattr(string name, string value, quota_info_t *quota)
   return 0;
 }
 
+int Server::tokenize_qos_vxattr(string name, string value, dmclock_info_t *info) {
+  dout(20) << __func__ << " called name: " << name << ", value: " << value << dendl;
+
+  std::vector<std::string> tokens;
+  boost::split(tokens, value, boost::is_any_of(" "));
+
+  if (tokens.size() > 3 || tokens.size() <= 0) {
+    return -EINVAL;
+  }
+
+  for (auto token: tokens) {
+    std::vector<std::string> type_value;
+    boost::split(type_value, token, boost::is_any_of("="));
+    dout(20) << "token: " << token << dendl;
+
+    if (type_value.size() > 2) {
+      return -EINVAL;
+    }
+
+    string type_ = type_value[0];
+    double value_;
+    try {
+      value_ = boost::lexical_cast<double>(type_value[1]);
+    } catch (boost::bad_lexical_cast const&) {
+      dout(10) << "bad ceph.dmclock vxattr value, unable to cast double for " << name << dendl;
+      return -EINVAL;
+    }
+
+    if (value_ < 0) {
+      return -EINVAL;
+    }
+
+    if (type_ == "mds_reservation"sv) {
+      info->mds_reservation = value_;
+    } else if (type_ == "mds_weight"sv) {
+      info->mds_weight = value_;
+    } else if (type_ == "mds_limit"sv) {
+      info->mds_limit = value_;
+    } else {
+      return -EINVAL;
+    }
+  }
+
+  return 0;
+}
+
 int Server::parse_qos_vxattr(string name, string value, dmclock_info_t *info)
 {
   dout(20) << "parse_qos_vxattr called name: " << name << ", value: " << value << dendl;
   double value_;
+
+  if (name == "ceph.dmclock"sv) {
+    return tokenize_qos_vxattr(name, value, info);
+  }
 
   try {
     value_ = boost::lexical_cast<double>(value);
@@ -5819,7 +5869,8 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
       return;
     }
 
-    if (name.find("mds_") != std::string::npos) {
+    if (name.find("mds_") != std::string::npos ||
+        value.find("mds_") != std::string::npos) {
 
       dmclock_info_t new_info = cur->get_projected_inode()->dmclock_info;
 
@@ -5845,6 +5896,11 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
 
       mdr->no_early_reply = true;
       pip = pi.inode.get();
+    }
+    else {
+      dout(10) <<  "unknown vxattr for dmclock " << name << dendl;
+      respond_to_request(mdr, -EINVAL);
+      return;
     }
 
   } else {
