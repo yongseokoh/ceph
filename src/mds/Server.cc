@@ -5484,6 +5484,7 @@ int Server::tokenize_qos_vxattr(string name, string value, dmclock_info_t *info)
   dout(20) << __func__ << " called name: " << name << ", value: " << value << dendl;
 
   std::vector<std::string> tokens;
+  boost::algorithm::trim(value);
   boost::split(tokens, value, boost::is_any_of(" "));
 
   if (tokens.size() > 3 || tokens.size() <= 0) {
@@ -5491,11 +5492,11 @@ int Server::tokenize_qos_vxattr(string name, string value, dmclock_info_t *info)
   }
 
   for (auto token: tokens) {
+    dout(20) << "token: " << token << dendl;
     std::vector<std::string> type_value;
     boost::split(type_value, token, boost::is_any_of("="));
-    dout(20) << "token: " << token << dendl;
 
-    if (type_value.size() > 2) {
+    if (type_value.size() != 2) {
       return -EINVAL;
     }
 
