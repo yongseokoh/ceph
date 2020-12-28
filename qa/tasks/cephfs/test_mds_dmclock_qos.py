@@ -127,6 +127,20 @@ class TestMDSDmclockQoS(CephFSTestCase):
         else:
             mount.mount(cephfs_mntpt=self.get_subvolume_path(self.subvolumes[1]))
 
+    def set_qos_multi_value(self, mount, reservation=None, weight=None, limit=None):
+        from os import getuid, getgid
+        mount.run_shell(['sudo', 'chown', "{0}:{1}".format(getuid(), getgid()), mount.hostfs_mntpt])
+
+        value = ""
+        if reservation:
+            value += "mds_reservation=" + str(reservation) + " "
+        if weight:
+            value += "mds_weight=" + str(reservation) + " "
+        if limit:
+            value += "mds_limit=" + str(reservation) + " "
+
+        mount.setfattr(mount.hostfs_mntpt, "ceph.dmclock", value)
+
     def set_qos_xattr(self, mount, reservation, weight, limit):
         from os import getuid, getgid
         mount.run_shell(['sudo', 'chown', "{0}:{1}".format(getuid(), getgid()), mount.hostfs_mntpt])
@@ -241,6 +255,69 @@ class TestMDSDmclockQoS(CephFSTestCase):
         self.assertIsNone(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation"))
         self.assertIsNone(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))
         self.assertIsNone(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight"))
+
+    def test_update_qos_single_param_negative(self):
+        log.info(self.fs.is_mds_qos())
+        self.enable_qos()
+
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+
+        value = ""
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock", value)
+
+        value = "mds_reservation=100,mds_limit=300"
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock", value)
+
+        value = "mds_reservation=100, mds_limit=300"
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock", value)
+
+        value = "mds_reservation = 50"
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock", value)
+
+        value = "mds_reservation=50mds_limit=100"
+        with self.assertRaises(CommandFailedError):
+            self.mount_a.setfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock", value)
+
+    def test_update_qos_single_param(self):
+        """
+        Update qos 3 values using setfattr with single parameter.
+        Check its result via getfattr and dump qos.
+        """
+        log.info(self.fs.is_mds_qos())
+        self.enable_qos()
+
+        self.remount_subvolume_xattr_root(self.mount_a, self.get_subvolume_root(self.mount_a))
+
+        reservation, weight, limit = 100, 100, 100
+        self.set_qos_multi_value(self.mount_a, reservation=50)
+        self.set_qos_multi_value(self.mount_a, reservation=50, weight=50)
+        self.set_qos_multi_value(self.mount_a, reservation=reservation, weight=weight, limit=limit)
+
+        # check updated vxattr using getfattr
+        self.assertEqual(
+                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_reservation"))),
+                reservation)
+        self.assertEqual(
+                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_weight"))),
+                weight)
+        self.assertEqual(
+                int(float(self.mount_a.getfattr(self.mount_a.hostfs_mntpt, "ceph.dmclock.mds_limit"))),
+                limit)
+
+        stat_qos = self.dump_qos()
+        log.info(stat_qos)
+
+        # check updated dmclock info using dump qos
+        for info in stat_qos:
+            self.assertIn("volume_id", info)
+            if info["volume_id"] == str(self.get_subvolume_root(self.mount_a)):
+                self.assertEqual(info["reservation"], reservation)
+                self.assertEqual(info["limit"], limit)
+                self.assertEqual(info["weight"], weight)
 
     def test_update_qos_value_subvolume(self):
         """
