@@ -36,6 +36,7 @@
 #include "PurgeQueue.h"
 #include "Server.h"
 #include "osdc/Journaler.h"
+#include "MDSDmclockScheduler.h"
 
 // Full .h import instead of forward declaration for PerfCounter, for the
 // benefit of those including this header and using MDSRank::logger
@@ -124,6 +125,7 @@ class Finisher;
 class ScrubStack;
 class C_MDS_Send_Command_Reply;
 class C_ExecAndReply;
+class MDSDmclockScheduler;
 
 /**
  * The public part of this class's interface is what's exposed to all
@@ -189,6 +191,7 @@ class MDSRank {
     ScrubStack   *scrubstack;
     DamageTable  damage_table;
 
+    MDSDmclockScheduler *mds_dmclock_scheduler;
 
     InoTable     *inotable;
 

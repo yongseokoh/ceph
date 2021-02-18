@@ -7244,7 +7244,6 @@ std::vector<Option> get_rgw_options() {
     .set_description("mclock limit for metadata requests")
     .add_see_also("rgw_dmclock_metadata_res")
     .add_see_also("rgw_dmclock_metadata_wgt"),
-
   });
 }
 
@@ -8276,6 +8275,27 @@ std::vector<Option> get_mds_options() {
      .set_default(2.0)
      .set_description("task status update interval to manager")
      .set_long_description("interval (in seconds) for sending mds task status to ceph manager"),
+
+    Option("mds_dmclock_enable", Option::TYPE_BOOL, Option::LEVEL_DEV)
+     .set_default(false)
+     .set_description("")
+     .set_long_description(""),
+
+    Option("mds_dmclock_reservation", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(10000)
+     .set_description("")
+     .set_long_description(""),
+
+    Option("mds_dmclock_weight", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(10000)
+     .set_description("")
+     .set_long_description(""),
+
+    Option("mds_dmclock_limit", Option::TYPE_FLOAT, Option::LEVEL_DEV)
+     .set_default(10000)
+     .set_description("")
+     .set_long_description(""),
+
   });
 }
 

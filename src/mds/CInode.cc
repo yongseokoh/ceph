@@ -46,6 +46,8 @@
 #include "mds/InoTable.h"
 #include "cephfs_features.h"
 
+#include "mds/mdstypes.h"
+
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mds
 #undef dout_prefix
@@ -3466,6 +3468,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
     bytes +=
       sizeof(version_t) + sizeof(__u32) + inline_data.length() + // inline data
       1 + 1 + 8 + 8 + 4 + // quota
+      sizeof(dmclock_info_t) +
       4 + layout.pool_ns.size() + // pool ns
       sizeof(struct ceph_timespec) + 8; // btime + change_attr
 
@@ -3644,6 +3647,7 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
     encode(inline_data, bl);
     mempool_inode *policy_i = ppolicy ? pi : oi;
     encode(policy_i->quota, bl);
+    encode(any_i->dmclock_info, bl);
     encode(layout.pool_ns, bl);
     encode(any_i->btime, bl);
     encode(any_i->change_attr, bl);
@@ -3697,6 +3701,9 @@ int CInode::encode_inodestat(bufferlist& bl, Session *session,
     if (conn->has_feature(CEPH_FEATURE_MDS_QUOTA)) {
       mempool_inode *policy_i = ppolicy ? pi : oi;
       encode(policy_i->quota, bl);
+    }
+    if (conn->has_feature(CEPH_FEATURE_FS_QOS)) {
+      encode(any_i->dmclock_info, bl);
     }
     if (conn->has_feature(CEPH_FEATURE_FS_FILE_LAYOUT_V2)) {
       encode(layout.pool_ns, bl);

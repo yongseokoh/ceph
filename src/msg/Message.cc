@@ -121,6 +121,7 @@
 #include "messages/MClientLease.h"
 #include "messages/MClientSnap.h"
 #include "messages/MClientQuota.h"
+#include "messages/MClientQoS.h"
 
 #include "messages/MMDSSlaveRequest.h"
 
@@ -165,6 +166,7 @@
 #include "messages/MDentryLink.h"
 
 #include "messages/MHeartbeat.h"
+#include "messages/MMDSDmclockQoS.h"
 
 #include "messages/MMDSTableRequest.h"
 
@@ -644,6 +646,9 @@ Message *decode_message(CephContext *cct, int crcflags,
   case CEPH_MSG_CLIENT_QUOTA:
     m = MClientQuota::create();
     break;
+  case CEPH_MSG_CLIENT_QOS:
+    m = MClientQoS::create();
+    break;
 
     // mds
   case MSG_MDS_SLAVE_REQUEST:
@@ -789,6 +794,10 @@ Message *decode_message(CephContext *cct, int crcflags,
 
   case MSG_MDS_LOCK:
     m = MLock::create();
+    break;
+
+  case MSG_MDS_DMCLOCK_QOS:
+    m = MDSDmclockQoS::create();
     break;
 
   case MSG_MGR_BEACON:

@@ -10609,6 +10609,9 @@ CInode *MDCache::add_replica_inode(bufferlist::const_iterator& p, CDentry *dn, M
     in->decode_replica(p, false);
     dout(10) << "add_replica_inode had " << *in << dendl;
   }
+  dout(20) << "add_replica_inode reservation: " << in->inode.dmclock_info.mds_reservation
+    << " weight: " << in->inode.dmclock_info.mds_weight 
+    << " limit: " << in->inode.dmclock_info.mds_limit << dendl;
 
   if (dn) {
     if (!dn->get_linkage()->is_primary() || dn->get_linkage()->get_inode() != in)

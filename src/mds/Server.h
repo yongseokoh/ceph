@@ -26,6 +26,7 @@
 #include "messages/MClientSnap.h"
 #include "messages/MClientReclaim.h"
 #include "messages/MClientReclaimReply.h"
+#include "messages/MClientQoS.h"
 #include "messages/MLock.h"
 
 #include "MDSRank.h"
@@ -244,6 +245,7 @@ public:
   void handle_client_setdirlayout(MDRequestRef& mdr);
 
   int parse_quota_vxattr(string name, string value, quota_info_t *quota);
+  int parse_qos_vxattr(string name, string value, dmclock_info_t *info);
   void create_quota_realm(CInode *in);
   int parse_layout_vxattr(string name, string value, const OSDMap& osdmap,
 			  file_layout_t *layout, bool validate=true);
@@ -348,6 +350,7 @@ public:
 
   void evict_cap_revoke_non_responders();
   void handle_conf_change(const std::set<std::string>& changed);
+
 
 private:
   void reply_client_request(MDRequestRef& mdr, const MClientReply::ref &reply);

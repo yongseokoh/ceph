@@ -1054,6 +1054,12 @@ def exec_test():
     ceph_cluster.set_ceph_conf("global", "mds root ino uid", "%s" % os.getuid())
     ceph_cluster.set_ceph_conf("global", "mds root ino gid", "%s" % os.getgid())
 
+    # TODO
+    #if opt_mds_qos:
+    #    ceph_cluster.set_ceph_conf("mds", "mds_dmclock_enable", "true")
+    #else:
+    #    ceph_cluster.set_ceph_conf("mds", "mds_dmclock_enable", "false")
+
     # Monkeypatch get_package_version to avoid having to work out what kind of distro we're on
     def _get_package_version(remote, pkg_name):
         # Used in cephfs tests to find fuse version.  Your development workstation *does* have >=2.9, right?

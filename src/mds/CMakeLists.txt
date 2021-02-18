@@ -39,9 +39,12 @@ set(mds_srcs
   Mantle.cc
   Anchor.cc
   OpenFileTable.cc
+  MDSDmclockScheduler.cc
   ${CMAKE_SOURCE_DIR}/src/common/TrackedOp.cc
   ${CMAKE_SOURCE_DIR}/src/common/MemoryModel.cc
   ${CMAKE_SOURCE_DIR}/src/osdc/Journaler.cc)
 add_library(mds STATIC ${mds_srcs})
-target_link_libraries(mds PRIVATE
+target_link_libraries(mds
+  PUBLIC dmclock::dmclock
+  PRIVATE
   heap_profiler cpu_profiler osdc liblua)

@@ -24,6 +24,8 @@
 #include "include/ceph_features.h"
 #include "common/errno.h"
 
+#include "dmclock/src/dmclock_recs.h"
+
 /***
  *
  * MClientReply - container message for MDS reply to a client's MClientRequest
@@ -133,6 +135,7 @@ struct InodeStat {
   version_t inline_version;
 
   quota_info_t quota;
+  dmclock_info_t dmclock_info;
 
   mds_rank_t dir_pin;
 
@@ -182,6 +185,7 @@ struct InodeStat {
       decode(inline_version, p);
       decode(inline_data, p);
       decode(quota, p);
+      decode(dmclock_info, p);
       decode(layout.pool_ns, p);
       decode(btime, p);
       decode(change_attr, p);
@@ -246,6 +250,13 @@ struct InodeStat {
       else
         quota = quota_info_t{};
 
+      if (features & CEPH_FEATURE_FS_QOS) {
+        decode(dmclock_info, p);
+      }
+      else {
+        dmclock_info = dmclock_info_t{};
+      }
+
       if ((features & CEPH_FEATURE_FS_FILE_LAYOUT_V2))
         decode(layout.pool_ns, p);
 
@@ -267,6 +278,7 @@ class MClientReply : public MessageInstance<MClientReply> {
 public:
   friend factory;
 
+public:
   // reply data
   struct ceph_mds_reply_head head {};
   bufferlist trace_bl;

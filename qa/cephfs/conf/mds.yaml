@@ -9,3 +9,4 @@ overrides:
         mds op complaint time: 180
         mds verify scatter: true
         osd op complaint time: 180
+        mds dmclock enable: true

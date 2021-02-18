@@ -57,6 +57,7 @@
 #include <string_view>
 
 #include "common/config.h"
+#include "MDSDmclockScheduler.h"
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mds
@@ -274,7 +275,7 @@ void Server::dispatch(const Message::const_ref &m)
     handle_client_session(MClientSession::msgref_cast(m));
     return;
   case CEPH_MSG_CLIENT_REQUEST:
-    handle_client_request(MClientRequest::msgref_cast(m));
+      mds->mds_dmclock_scheduler->handle_mds_request(MClientRequest::msgref_cast(m));
     return;
   case CEPH_MSG_CLIENT_RECLAIM:
     handle_client_reclaim(MClientReclaim::msgref_cast(m));
@@ -551,6 +552,7 @@ void Server::handle_client_session(const MClientSession::const_ref &m)
       }
 
       feature_bitset_t missing_features = required_client_features;
+      dout(20) << " required client features" << required_client_features << dendl;
       missing_features -= client_metadata.features;
       if (!missing_features.empty()) {
 	stringstream ss;
@@ -562,6 +564,7 @@ void Server::handle_client_session(const MClientSession::const_ref &m)
 	session->clear();
 	break;
       }
+      dout(20) << " missing features" << missing_features << dendl;
 
       // Special case for the 'root' metadata path; validate that the claimed
       // root is actually within the caps of the session
@@ -729,6 +732,7 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
 	     << ", noop" << dendl;
     // close must have been canceled (by an import?), or any number of other things..
   } else if (open) {
+    mds->mds_dmclock_scheduler->add_session(session);
     ceph_assert(session->is_opening());
     mds->sessionmap.set_state(session, Session::STATE_OPEN);
     mds->sessionmap.touch_session(session);
@@ -771,7 +775,7 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
 	mds->maybe_clientreplay_done();
       }
     }
-    
+
     if (session->is_closing()) {
       // mark con disposable.  if there is a fault, we will get a
       // reset and clean it up.  if the client hasn't received the
@@ -785,6 +789,8 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
         session->get_connection()->mark_disposable();
       }
 
+      mds->mds_dmclock_scheduler->remove_session(session);
+
       // reset session
       mds->send_message_client(MClientSession::create(CEPH_SESSION_CLOSE), session);
       mds->sessionmap.set_state(session, Session::STATE_CLOSED);
@@ -797,6 +803,7 @@ void Server::_session_logged(Session *session, uint64_t state_seq, bool open, ve
         mds->sessionmap.set_state(session, Session::STATE_CLOSED);
         session->set_connection(nullptr);
       }
+      mds->mds_dmclock_scheduler->remove_session(session);
       mds->sessionmap.remove_session(session);
     } else {
       ceph_abort();
@@ -883,6 +890,7 @@ void Server::finish_force_open_sessions(const map<client_t,pair<Session*,uint64_
 	dout(10) << "force_open_sessions opened " << session->info.inst << dendl;
 	mds->sessionmap.set_state(session, Session::STATE_OPEN);
 	mds->sessionmap.touch_session(session);
+        mds->mds_dmclock_scheduler->add_session(session);
 
 	auto reply = MClientSession::create(CEPH_SESSION_OPEN);
 	if (session->info.has_feature(CEPHFS_FEATURE_MIMIC))
@@ -1101,6 +1109,7 @@ void Server::evict_cap_revoke_non_responders() {
 }
 
 void Server::handle_conf_change(const std::set<std::string>& changed) {
+    dout(0) << "Server::handle_conf_change() called" << dendl;
   if (changed.count("mds_replay_unsafe_with_closed_session")) {
     replay_unsafe_with_closed_session = g_conf().get_val<bool>("mds_replay_unsafe_with_closed_session");
   }
@@ -1323,6 +1332,7 @@ void Server::handle_client_reconnect(const MClientReconnect::const_ref &m)
   }
 
   if (!m->has_more()) {
+    mds->mds_dmclock_scheduler->add_session(session);
     // notify client of success with an OPEN
     auto reply = MClientSession::create(CEPH_SESSION_OPEN);
     if (session->info.has_feature(CEPHFS_FEATURE_MIMIC))
@@ -4513,12 +4523,12 @@ void Server::handle_client_readdir(MDRequestRef& mdr)
  */
 class C_MDS_inode_update_finish : public ServerLogContext {
   CInode *in;
-  bool truncating_smaller, changed_ranges, adjust_realm;
+  bool truncating_smaller, changed_ranges, adjust_realm, update_dmclock;
 public:
   C_MDS_inode_update_finish(Server *s, MDRequestRef& r, CInode *i,
-			    bool sm=false, bool cr=false, bool ar=false) :
+			    bool sm=false, bool cr=false, bool ar=false, bool ud=false) :
     ServerLogContext(s, r), in(i),
-    truncating_smaller(sm), changed_ranges(cr), adjust_realm(ar) { }
+    truncating_smaller(sm), changed_ranges(cr), adjust_realm(ar), update_dmclock(ud) { }
   void finish(int r) override {
     ceph_assert(r == 0);
 
@@ -4547,6 +4557,28 @@ public:
 
     if (changed_ranges)
       get_mds()->locker->share_inode_max_size(in);
+
+    if (update_dmclock) {
+      string path;
+      in->make_path_string(path, true);
+
+      if (!in->is_auth() || in->is_frozen())
+        return;
+
+      // sync client
+      auto dmclock_info = in->get_projected_inode()->dmclock_info;
+      for (auto &p : in->get_client_caps()) {
+        const Capability *cap = &p.second;
+        auto msg = MClientQoS::create();
+        msg->ino = in->ino();
+        msg->dmclock_info = dmclock_info;
+
+        dout(20) << "send MClientQoS Message to client " << p.first << dendl;
+        mds->send_message_client_counted(msg, cap->get_session());
+      }
+
+      mds->mds_dmclock_scheduler->broadcast_qos_info_update_to_mds(path, in->get_projected_inode()->dmclock_info);
+    }
   }
 };
 
@@ -5198,6 +5230,36 @@ int Server::parse_quota_vxattr(string name, string value, quota_info_t *quota)
   return 0;
 }
 
+int Server::parse_qos_vxattr(string name, string value, dmclock_info_t *info)
+{
+  dout(20) << "parse_qos_vxattr called name: " << name << ", value: " << value << dendl;
+  double value_;
+
+  try {
+    value_ = boost::lexical_cast<double>(value);
+  } catch (boost::bad_lexical_cast const&) {
+    dout(10) << "bad ceph.dmclock vxattr value, unable to cast double for " << name << dendl;
+    return -EINVAL;
+  }
+
+  if (value_ < 0) {
+    return -EINVAL;
+  }
+
+  if (name == "ceph.dmclock.mds_reservation"sv) {
+    info->mds_reservation = value_;
+  } else if (name == "ceph.dmclock.mds_weight"sv) {
+    info->mds_weight = value_;
+  } else if (name == "ceph.dmclock.mds_limit"sv) {
+    info->mds_limit = value_;
+  } else {
+    return -EINVAL;
+  }
+
+  dout(20) << "parse_qos_vxattr success" << dendl;
+  return 0;
+}
+
 void Server::create_quota_realm(CInode *in)
 {
   dout(10) << __func__ << " " << *in << dendl;
@@ -5301,6 +5363,8 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
   }
 
   bool adjust_realm = false;
+  bool update_dmclock = false;
+
   if (name.compare(0, 15, "ceph.dir.layout") == 0) {
     if (!cur->is_dir()) {
       respond_to_request(mdr, -EINVAL);
@@ -5461,6 +5525,58 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
     auto &pi = cur->project_inode();
     cur->set_export_pin(rank);
     pip = &pi.inode;
+  } else if (name.find("ceph.dmclock") == 0) {
+
+    if (!cur->is_dir()) {
+      respond_to_request(mdr, -EINVAL);
+      return;
+    }
+
+    if (name.find("mds_") != std::string::npos) {
+
+      dmclock_info_t new_info = cur->get_projected_inode()->dmclock_info;
+
+      string path_str;
+      cur->make_path_string(path_str, true);
+      filepath path(path_str);
+
+      if (path.depth() != MDSDmclockScheduler::SUBVOL_ROOT_DEPTH) {
+          dout(10) << "bad subvolume path " << path_str << " " << path.depth() << " for dmclock" << dendl;
+          respond_to_request(mdr, -EINVAL);
+          return;
+      } else {
+        filepath& parent_path = path;
+
+        parent_path.pop_dentry();
+
+        if (!(parent_path.get_ino() == MDS_INO_ROOT &&
+            parent_path.get_path() == "volumes/_nogroup")) {
+          dout(10) << "bad subvolume path " << path_str << " " << parent_path.depth() << " for dmclock" << dendl;
+          respond_to_request(mdr, -EINVAL);
+          return;
+        }
+      }
+
+      int r = parse_qos_vxattr(name, value, &new_info);
+      if (r < 0) {
+        respond_to_request(mdr, r);
+        return;
+      }
+
+      if (new_info == cur->get_projected_inode()->dmclock_info) {
+        respond_to_request(mdr, 0);
+        return;
+      }
+
+      auto &pi = cur->project_inode();
+      pi.inode.dmclock_info = new_info;
+
+      update_dmclock = new_info.is_valid();
+
+      mdr->no_early_reply = true;
+      pip = &pi.inode;
+    }
+
   } else {
     dout(10) << " unknown vxattr " << name << dendl;
     respond_to_request(mdr, -EINVAL);
@@ -5484,7 +5600,7 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur,
   mdcache->journal_dirty_inode(mdr.get(), &le->metablob, cur);
 
   journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(this, mdr, cur,
-								   false, false, adjust_realm));
+								   false, false, adjust_realm, update_dmclock));
   return;
 }
 
@@ -5540,6 +5656,46 @@ void Server::handle_remove_vxattr(MDRequestRef& mdr, CInode *cur,
     // the rmxattr request to do this.
     handle_set_vxattr(mdr, cur, dir_layout, lov);
     return;
+  } else if (name.find("ceph.dmclock") == 0) {
+
+    if (!cur->is_dir()) {
+      respond_to_request(mdr, -EINVAL);
+      return;
+    }
+    
+    auto &pi = cur->project_inode();
+    string path;
+    cur->make_path_string(path, true);
+
+    size_t pos = name.find("mds_");
+    if (pos != std::string::npos) {
+
+      const string type = name.substr(pos + 4);
+
+      if (type == "reservation") {
+	pi.inode.dmclock_info.mds_reservation = 0;
+      } else if (type == "weight") {
+	pi.inode.dmclock_info.mds_weight = 0;
+      } else if (type == "limit") {
+	pi.inode.dmclock_info.mds_limit = 0;
+      }
+      pi.inode.version = cur->pre_dirty();
+
+      mds->mds_dmclock_scheduler->set_default_volume_info(path);
+
+    // log + wait
+      mdr->ls = mdlog->get_current_segment();
+      EUpdate *le = new EUpdate(mdlog, "remove dmclock vxattr");
+      mdlog->start_entry(le);
+      le->metablob.add_client_req(req->get_reqid(), req->get_oldest_client_tid());
+      mdcache->predirty_journal_parents(mdr, &le->metablob, cur, 0, PREDIRTY_PRIMARY);
+      mdcache->journal_dirty_inode(mdr.get(), &le->metablob, cur);
+
+      mdr->no_early_reply = true;
+      journal_and_reply(mdr, cur, 0, le, new C_MDS_inode_update_finish(this, mdr, cur));
+
+      return ;
+    }
   }
 
   respond_to_request(mdr, -ENODATA);

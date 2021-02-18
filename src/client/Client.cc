@@ -50,6 +50,7 @@
 #include "messages/MClientCaps.h"
 #include "messages/MClientLease.h"
 #include "messages/MClientQuota.h"
+#include "messages/MClientQoS.h"
 #include "messages/MClientReclaim.h"
 #include "messages/MClientReclaimReply.h"
 #include "messages/MClientReconnect.h"
@@ -892,6 +893,7 @@ Inode * Client::add_update_inode(InodeStat *st, utime_t from,
   }
 
   if (in->is_dir()) {
+    in->dmclock_info = st->dmclock_info;
     if (new_version || (new_issued & CEPH_CAP_FILE_SHARED)) {
       in->dirstat = st->dirstat;
     }
@@ -2625,6 +2627,9 @@ bool Client::ms_dispatch2(const MessageRef &m)
     break;
   case CEPH_MSG_CLIENT_QUOTA:
     handle_quota(MClientQuota::msgref_cast(m));
+    break;
+  case CEPH_MSG_CLIENT_QOS:
+    handle_qos(MClientQoS::msgref_cast(m));
     break;
 
   default:
@@ -4836,6 +4841,35 @@ void Client::handle_snap(const MConstRef<MClientSnap>& m)
 	queue_cap_snap(in, p->second);
     }
     put_snap_realm(realm);
+  }
+}
+
+void Client::handle_qos(const MConstRef<MClientQoS>& m)
+{
+  mds_rank_t mds = mds_rank_t(m->get_source().num());
+
+  MetaSession *session = _get_mds_session(mds, m->get_connection().get());
+  if (!session) {
+    ldout(cct, 10) << __func__ << " " << *m << " no session, from mds " << mds << dendl;
+    return;
+  }
+
+  got_mds_push(session);
+
+  ldout(cct, 10) << __func__ << " " << *m << " from mds." << mds << dendl;
+
+  vinodeno_t vino(m->ino, CEPH_NOSNAP);
+  if (inode_map.count(vino)) {
+    Inode *in = NULL;
+    in = inode_map[vino];
+
+    if (in) {
+      ldout(cct, 10) << __func__ << " Update client Inode's dmclock_info to " << m->dmclock_info << dendl;
+      in->dmclock_info = m->dmclock_info;
+    }
+    else {
+      ldout(cct, 10) << __func__ << " " << *m << " There is no inode in client." << dendl;
+    }
   }
 }
 
@@ -11826,6 +11860,27 @@ size_t Client::_vxattrcb_quota_max_files(Inode *in, char *val, size_t size)
   return snprintf(val, size, "%lld", (long long int)in->quota.max_files);
 }
 
+bool Client::_vxattrcb_dmclock_exists(Inode *in)
+{
+  return in->dmclock_info.is_valid();
+}
+size_t Client::_vxattrcb_dmclock(Inode *in, char *val, size_t size)
+{
+  return snprintf(val, size, "dmclock_mds_qos=%s", (in->dmclock_info.is_valid()) ? "enabled" : "disabled");
+}
+size_t Client::_vxattrcb_dmclock_mds_reservation(Inode* in, char *val, size_t size)
+{
+  return snprintf(val, size, "%f", in->dmclock_info.mds_reservation);
+}
+size_t Client::_vxattrcb_dmclock_mds_weight(Inode* in, char *val, size_t size)
+{
+  return snprintf(val, size, "%f", in->dmclock_info.mds_weight);
+}
+size_t Client::_vxattrcb_dmclock_mds_limit(Inode* in, char *val, size_t size)
+{
+  return snprintf(val, size, "%f", in->dmclock_info.mds_limit);
+}
+
 bool Client::_vxattrcb_layout_exists(Inode *in)
 {
   return in->layout != file_layout_t();
@@ -11972,6 +12027,16 @@ size_t Client::_vxattrcb_snap_btime(Inode *in, char *val, size_t size)
   flags: 0,                                                     \
 }
 
+#define XATTR_DMCLOCK_FIELD(_type, _name)		                \
+{								\
+  name: CEPH_XATTR_NAME(_type, _name),			        \
+  getxattr_cb: &Client::_vxattrcb_ ## _type ## _ ## _name,	\
+  readonly: false,						\
+  hidden: false,							\
+  exists_cb: &Client::_vxattrcb_dmclock_exists,			\
+  flags: 0,                                                     \
+}
+
 const Client::VXattr Client::_dir_vxattrs[] = {
   {
     name: "ceph.dir.layout",
@@ -12020,6 +12085,17 @@ const Client::VXattr Client::_dir_vxattrs[] = {
     exists_cb: &Client::_vxattrcb_snap_btime_exists,
     flags: 0,
   },
+  {
+    name: "ceph.dmclock",
+    getxattr_cb: &Client::_vxattrcb_dmclock,
+    readonly: false,
+    hidden: false,
+    exists_cb: &Client::_vxattrcb_dmclock_exists,
+    flags: 0,
+  },
+  XATTR_DMCLOCK_FIELD(dmclock, mds_reservation),
+  XATTR_DMCLOCK_FIELD(dmclock, mds_weight),
+  XATTR_DMCLOCK_FIELD(dmclock, mds_limit),
   { name: "" }     /* Required table terminator */
 };
 

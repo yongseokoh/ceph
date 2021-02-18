@@ -1,0 +1,9 @@
+overrides:
+  ceph:
+    log-whitelist:
+      - \(MDS_CACHE_OVERSIZED\)
+
+tasks:
+  - cephfs_test_runner:
+      modules:
+        - tasks.cephfs.test_mds_dmclock_qos
