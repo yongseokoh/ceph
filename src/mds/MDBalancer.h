@@ -102,11 +102,11 @@ private:
                    mds_rank_t ex, double& maxex,
                    mds_rank_t im, double& maxim);
 
-  double get_maxim(balance_state_t &state, mds_rank_t im) {
-    return target_load - mds_meta_load[im] - state.imported[im];
+  double get_maxim(balance_state_t &state, mds_rank_t im, double im_target_load) {
+    return im_target_load - mds_meta_load[im] - state.imported[im];
   }
-  double get_maxex(balance_state_t &state, mds_rank_t ex) {
-    return mds_meta_load[ex] - target_load - state.exported[ex];
+  double get_maxex(balance_state_t &state, mds_rank_t ex, double ex_target_load) {
+    return mds_meta_load[ex] - ex_target_load - state.exported[ex];
   }
 
   /**
@@ -117,10 +117,17 @@ private:
    * export targets message again.
    */
   void try_rebalance(balance_state_t& state);
+  void handle_rank_mask_bits();
+  bool test_rank_mask(mds_rank_t rank);
 
   bool bal_fragment_dirs;
   int64_t bal_fragment_interval;
   static const unsigned int AUTH_TREES_THRESHOLD = 5;
+  std::string bal_rank_mask;
+  std::string last_bal_rank_mask;
+  std::set<mds_rank_t> bal_rank_mask_set;
+  unsigned last_num_mdss;
+  unsigned num_mdss_in_rank_mask;
 
   MDSRank *mds;
   Messenger *messenger;

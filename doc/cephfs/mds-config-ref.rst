@@ -41,6 +41,7 @@
 .. confval:: mds_bal_need_max
 .. confval:: mds_bal_midchunk
 .. confval:: mds_bal_minchunk
+.. confval:: mds_bal_rank_mask
 .. confval:: mds_replay_interval
 .. confval:: mds_shutdown_check
 .. confval:: mds_thrash_exports

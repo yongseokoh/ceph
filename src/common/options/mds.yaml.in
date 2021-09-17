@@ -1452,6 +1452,14 @@ options:
   type: bool
   level: dev
   default: false
+- name: mds_bal_rank_mask
+  type: str
+  level: advanced
+  desc: hexadecimal bit mask of the active MDS ranks to rebalance on.
+  long_desc: An MDS rank mask determines the group of active ranks on which it is suitable to rebalance.
+    Balancer dynamically redistributes subtrees within certain active ranks.
+  services:
+  - mds
   flags:
   - runtime
 - name: mds_symlink_recovery
