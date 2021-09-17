@@ -78,6 +78,7 @@ MDBalancer::MDBalancer(MDSRank *m, Messenger *msgr, MonClient *monc) :
 {
   bal_fragment_dirs = g_conf().get_val<bool>("mds_bal_fragment_dirs");
   bal_fragment_interval = g_conf().get_val<int64_t>("mds_bal_fragment_interval");
+  bal_rank_mask = g_conf().get_val<std::string>("mds_bal_rank_mask");
 }
 
 void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const MDSMap& mds_map)
@@ -86,6 +87,57 @@ void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const 
     bal_fragment_dirs = g_conf().get_val<bool>("mds_bal_fragment_dirs");
   if (changed.count("mds_bal_fragment_interval"))
     bal_fragment_interval = g_conf().get_val<int64_t>("mds_bal_fragment_interval");
+  if (changed.count("mds_bal_rank_mask"))
+    bal_rank_mask = g_conf().get_val<std::string>("mds_bal_rank_mask");
+}
+
+void MDBalancer::handle_rank_mask_bits()
+{
+  bal_rank_mask_set.clear();
+
+  std::string lower_case_str;
+  lower_case_str.resize(bal_rank_mask.size());
+  std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), lower_case_str.begin(), ::tolower);
+
+  bool all_ff;
+  uint32_t count;
+  if (lower_case_str.substr(0, 2) != "0x" || lower_case_str.size() < 3 ||
+      (lower_case_str.substr(0, 3) == "0x0" && lower_case_str.size() == 3)) {
+    all_ff = true;
+    count = (mds->mdsmap->get_max_mds() + 3) / 4;
+  } else {
+    reverse(lower_case_str.begin(), lower_case_str.end());
+    all_ff = false;
+    count = lower_case_str.size() - 2;
+  }
+
+  for (uint32_t i = 0; i < count; i++) {
+    uint32_t value;
+    if (all_ff == true || isxdigit(lower_case_str[i]) == false)
+      value = ~0;
+    else
+      value = stoul(lower_case_str.substr(i, 1), nullptr, 16);
+
+    uint32_t offset = 0;
+
+    while (offset < 4) {
+      mds_rank_t masked_rank = i * 4 + offset;
+      if (masked_rank >= mds->mdsmap->get_max_mds())
+        return;
+      if (value & (1 << offset)) {
+        bal_rank_mask_set.insert(masked_rank);
+        dout(17) << " rank_mask mds." << masked_rank << dendl;
+      }
+      offset++;
+    }
+  }
+}
+
+bool MDBalancer::is_in_rank_mask(mds_rank_t rank)
+{
+  if (bal_rank_mask_set.find(rank) != bal_rank_mask_set.end())
+    return true;
+  return false;
 }
 
 void MDBalancer::handle_export_pins(void)
@@ -428,6 +480,8 @@ void MDBalancer::send_heartbeat()
     em.first->second = load;
   }
 
+  handle_rank_mask_bits();
+
   // import_map -- how much do i import from whom
   map<mds_rank_t, float> import_map;
   for (auto& im : mds->mdcache->get_auth_subtrees()) {
@@ -724,10 +778,26 @@ void MDBalancer::prep_rebalance(int beat)
 		<< " ~ " << l << dendl;
 
       if (whoami == i) my_load = l;
-      total_load += l;
 
-      load_map.insert(pair<double,mds_rank_t>( l, i ));
+      if (is_in_rank_mask(i)) {
+        total_load += l;
+        load_map.insert(pair<double,mds_rank_t>( l, i ));
+      }
     }
+
+    if (is_in_rank_mask(whoami) == false) {
+      migrate_to_masked_rank();
+      return;
+    } else {
+      for (mds_rank_t i = mds_rank_t(0); i < mds_rank_t(cluster_size); i++) {
+        if (is_in_rank_mask(i) == false) {
+          mds_meta_load.erase(mds_meta_load[i]);
+        }
+      }
+    }
+
+    if (bal_rank_mask_set.size())
+      cluster_size = bal_rank_mask_set.size();
 
     // target load
     target_load = total_load / (double)cluster_size;
@@ -1055,6 +1125,74 @@ void MDBalancer::try_rebalance(balance_state_t& state)
   }
 
   dout(7) << "done" << dendl;
+  mds->mdcache->show_subtrees();
+}
+
+void MDBalancer::migrate_to_masked_rank()
+{
+  mds_rank_t whoami = mds->get_nodeid();
+  std::vector<CDir*> exports;
+  double export_have = 0.0;
+
+  for (auto& dir : mds->mdcache->get_fullauth_subtrees()) {
+    CInode *diri = dir->get_inode();
+
+    if (diri->is_mdsdir())
+      continue;
+    if (diri->get_export_pin(false) != MDS_RANK_NONE)
+      continue;
+    if (dir->is_freezing() || dir->is_frozen())
+      continue;
+    if (dir->get_dir_auth().first != whoami)
+      continue;
+
+    if (dir->ino() == CEPH_INO_ROOT) {
+      set<CDir*> already_exporting;
+      find_exports(dir, dir->pop_auth_subtree.meta_load(), &exports, export_have, already_exporting);
+    } else {
+      export_have += dir->pop_auth_subtree.meta_load();
+      exports.push_back(dir);
+    }
+  }
+
+  if (exports.size() == 0)
+    return;
+
+  double total_load = 0.0;
+
+  for (const auto& target_rank: bal_rank_mask_set) {
+     total_load +=  mds_meta_load[target_rank];
+  }
+
+  // recaculate target_load
+  double target_load = (total_load + export_have) / bal_rank_mask_set.size();
+
+  dout(15) << " mds." << whoami << " try migrate target_load "
+            << target_load  << " to each rank" << dendl;
+
+  for (const auto& target_rank: bal_rank_mask_set) {
+    double export_need = target_load - mds_meta_load[target_rank];
+
+    dout(17) << " mds." << whoami << " may export " << export_need << " to mds." << target_rank << dendl;
+    for (auto it = exports.begin(); it != exports.end(); ) {
+      CDir *dir = *it;
+
+      mds->mdcache->migrator->export_dir_nicely(dir, target_rank);
+      export_need -= dir->pop_auth_subtree.meta_load();
+
+      dout(17) << "   - exporting " << dir->pop_auth_subtree
+            << " " << dir->pop_auth_subtree.meta_load()
+            << " to mds." << target_rank << " " << *dir << dendl;
+
+      it = exports.erase(it);
+
+      if (export_need < 0.0) {
+        break;
+      }
+    }
+  }
+
+  dout(15) << "migration to masked ranks done" << dendl;
   mds->mdcache->show_subtrees();
 }
 
