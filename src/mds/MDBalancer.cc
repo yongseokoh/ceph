@@ -105,8 +105,6 @@ void MDBalancer::handle_rank_mask_bits()
   last_bal_rank_mask = bal_rank_mask;
   last_num_mdss = mds->get_mds_map()->get_num_in_mds();
 
-  bal_rank_mask_set.clear();
-
   std::string bal_hex_str;
   bal_hex_str.resize(bal_rank_mask.size());
   std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), bal_hex_str.begin(), ::tolower);
@@ -117,12 +115,10 @@ void MDBalancer::handle_rank_mask_bits()
     uint32_t hit_max_mds = 0;
     reverse(bal_hex_str.begin(), bal_hex_str.end());
     bal_hex_str.resize(bal_hex_str.size()-2);
-
     for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
       if (isxdigit(bal_hex_str[qpos])) {
         uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
         quatet_sum += quatet_value;
-
         uint32_t offset = 0;
         while (offset < 4) {
           if (quatet_value & (1 << offset)) {
@@ -152,8 +148,8 @@ void MDBalancer::handle_rank_mask_bits()
     bal_hex_str.assign(max_mds_quatet_count, 'f');
   }
 
-  uint32_t quatet_count = bal_hex_str.size();
-  for (uint32_t qpos = 0; qpos < quatet_count; qpos++) {
+  bal_rank_mask_set.clear();
+  for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
     uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
     uint32_t offset = 0;
     while (offset < 4) {
@@ -884,7 +880,7 @@ void MDBalancer::prep_rebalance(int beat)
       for (multimap<double,mds_rank_t>::reverse_iterator ex = exporters.rbegin();
 	   ex != exporters.rend();
 	   ++ex) {
-    double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
+	double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
 	double maxex = get_maxex(state, ex->second, ex_target_load);
 	if (maxex <= .001) continue;
 
@@ -908,10 +904,9 @@ void MDBalancer::prep_rebalance(int beat)
       multimap<double,mds_rank_t>::iterator im = importers.begin();
       while (ex != exporters.rend() &&
 	     im != importers.end()) {
-        double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
-        double maxex = get_maxex(state, ex->second, ex_target_load);
+	double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
+	double maxex = get_maxex(state, ex->second, ex_target_load);
 	double maxim = get_maxim(state, im->second, target_load);
-
 	if (maxex < .001 || maxim < .001) break;
 	try_match(state, ex->second, maxex, im->second, maxim);
 	if (maxex <= .001) ++ex;
@@ -924,8 +919,8 @@ void MDBalancer::prep_rebalance(int beat)
       multimap<double,mds_rank_t>::iterator im = importers.begin();
       while (ex != exporters.end() &&
 	     im != importers.end()) {
-        double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
-        double maxex = get_maxex(state, ex->second, ex_target_load);
+	double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
+	double maxex = get_maxex(state, ex->second, ex_target_load);
 	double maxim = get_maxim(state, im->second, target_load);
 	if (maxex < .001 || maxim < .001) break;
 	try_match(state, ex->second, maxex, im->second, maxim);
