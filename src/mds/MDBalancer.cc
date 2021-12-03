@@ -103,7 +103,7 @@ void MDBalancer::handle_rank_mask_bits()
   std::string lower_case_str;
   lower_case_str.resize(bal_rank_mask.size());
   std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), lower_case_str.begin(), ::tolower);
-
+#if 0
   bool valid_hex = true;
 
   if (lower_case_str.substr(0, 2) != "0x") {
@@ -122,6 +122,26 @@ void MDBalancer::handle_rank_mask_bits()
       valid_hex = false;
     }
   }
+#else
+  bool valid_hex = false;
+
+  if (lower_case_str.substr(0, 2) == "0x") {
+    uint32_t quatet_sum = 0;
+    for (uint32_t i = 2; i < lower_case_str.size(); i++) {
+      if (isxdigit(lower_case_str[i])) {
+        quatet_sum += stoul(lower_case_str.substr(i, 1), nullptr, 16);
+      } else {
+        valid_hex = false;
+        break;
+      }
+    }
+
+    // no bits are set
+    if (valid_hex && quatet_sum == 0) {
+      valid_hex = false;
+    }
+  }
+#endif
 
   uint32_t quatet_count;
   if (valid_hex) {
@@ -850,7 +870,6 @@ void MDBalancer::prep_rebalance(int beat)
 	importer_set.insert(it->second);
       } else {
 	int mds_last_epoch_under = mds_last_epoch_under_map[it->second];
-       beat_epoch - mds_last_epoch_under << dendl;
 	if (!(mds_last_epoch_under && beat_epoch - mds_last_epoch_under < 2)) {
 	  dout(15) << "   mds." << it->second << " is exporter" << dendl;
 	  exporters.insert(pair<double,mds_rank_t>(it->first,it->second));
