@@ -854,8 +854,8 @@ void MDBalancer::prep_rebalance(int beat)
       for (multimap<double,mds_rank_t>::reverse_iterator ex = exporters.rbegin();
 	   ex != exporters.rend();
 	   ++ex) {
-    double _target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
-	double maxex = get_maxex(state, ex->second, _target_load);
+    double ex_target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
+	double maxex = get_maxex(state, ex->second, ex_target_load);
     dout(0) << " mds." << ex->second << " maxex " << maxex << dendl;
 	if (maxex <= .001) continue;
 
@@ -880,8 +880,8 @@ void MDBalancer::prep_rebalance(int beat)
       multimap<double,mds_rank_t>::iterator im = importers.begin();
       while (ex != exporters.rend() &&
 	     im != importers.end()) {
-        double _target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
-        double maxex = get_maxex(state, ex->second, _target_load);
+        double ex_target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
+        double maxex = get_maxex(state, ex->second, ex_target_load);
 	double maxim = get_maxim(state, im->second, target_load);
 
     dout(0) << " ex mds." << ex->second << " im mds." << im->second << dendl;
@@ -899,8 +899,8 @@ void MDBalancer::prep_rebalance(int beat)
       multimap<double,mds_rank_t>::iterator im = importers.begin();
       while (ex != exporters.end() &&
 	     im != importers.end()) {
-        double _target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
-        double maxex = get_maxex(state, ex->second, _target_load);
+        double ex_target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
+        double maxex = get_maxex(state, ex->second, ex_target_load);
 	double maxim = get_maxim(state, im->second, target_load);
     dout(0) << " ex mds." << ex->second << " im mds." << im->second << dendl;
     dout(0) << " maxex " << maxex << " maxim " << maxim << dendl;
