@@ -779,28 +779,15 @@ void MDBalancer::prep_rebalance(int beat)
 
       if (whoami == i) my_load = l;
 
-      if (is_in_rank_mask(i)) {
-        total_load += l;
-        load_map.insert(pair<double,mds_rank_t>( l, i ));
-      }
+      total_load += l;
+
+      load_map.insert(pair<double,mds_rank_t>( l, i ));
     }
 
-    if (is_in_rank_mask(whoami) == false) {
-      migrate_to_masked_rank();
-      return;
-    } else {
-      for (mds_rank_t i = mds_rank_t(0); i < mds_rank_t(cluster_size); i++) {
-        if (is_in_rank_mask(i) == false) {
-          mds_meta_load.erase(mds_meta_load[i]);
-        }
-      }
-    }
-
-    if (bal_rank_mask_set.size())
-      cluster_size = bal_rank_mask_set.size();
+    double target_cluster_size = bal_rank_mask_set.size() ? bal_rank_mask_set.size() : cluster_size;
 
     // target load
-    target_load = total_load / (double)cluster_size;
+    target_load = total_load / target_cluster_size;
     dout(7) << "my load " << my_load
 	    << "   target " << target_load
 	    << "   total " << total_load
@@ -808,7 +795,8 @@ void MDBalancer::prep_rebalance(int beat)
 
     // under or over?
     for (const auto& [load, rank] : load_map) {
-      if (load < target_load * (1.0 + g_conf()->mds_bal_min_rebalance)) {
+      if (is_in_rank_mask(rank) && 
+          load < target_load * (1.0 + g_conf()->mds_bal_min_rebalance)) {
 	dout(7) << " mds." << rank << " is underloaded or barely overloaded." << dendl;
 	mds_last_epoch_under_map[rank] = beat_epoch;
       }
@@ -837,12 +825,15 @@ void MDBalancer::prep_rebalance(int beat)
     for (multimap<double,mds_rank_t>::iterator it = load_map.begin();
 	 it != load_map.end();
 	 ++it) {
-      if (it->first < target_load) {
+      dout(0) << " mds." << it->second << " load " << it->first << " target load " << target_load << dendl;
+      if (it->first < target_load && is_in_rank_mask(it->second)) {
 	dout(15) << "   mds." << it->second << " is importer" << dendl;
 	importers.insert(pair<double,mds_rank_t>(it->first,it->second));
 	importer_set.insert(it->second);
       } else {
 	int mds_last_epoch_under = mds_last_epoch_under_map[it->second];
+      dout(0) << " mds." << it->second << " last epoch under " << mds_last_epoch_under << " beat_epoch - mds_last_epoch_under " << 
+       beat_epoch - mds_last_epoch_under << dendl;
 	if (!(mds_last_epoch_under && beat_epoch - mds_last_epoch_under < 2)) {
 	  dout(15) << "   mds." << it->second << " is exporter" << dendl;
 	  exporters.insert(pair<double,mds_rank_t>(it->first,it->second));
@@ -863,14 +854,17 @@ void MDBalancer::prep_rebalance(int beat)
       for (multimap<double,mds_rank_t>::reverse_iterator ex = exporters.rbegin();
 	   ex != exporters.rend();
 	   ++ex) {
-	double maxex = get_maxex(state, ex->second);
+    double _target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
+	double maxex = get_maxex(state, ex->second, _target_load);
+    dout(0) << " mds." << ex->second << " maxex " << maxex << dendl;
 	if (maxex <= .001) continue;
 
 	// check importers. for now, just in arbitrary order (no intelligent matching).
 	for (map<mds_rank_t, float>::iterator im = mds_import_map[ex->second].begin();
 	     im != mds_import_map[ex->second].end();
 	     ++im) {
-	  double maxim = get_maxim(state, im->first);
+	  double maxim = get_maxim(state, im->first, target_load);
+      dout(0) << " mds." << im->first<< " maxim " << maxim << dendl;
 	  if (maxim <= .001) continue;
 	  try_match(state, ex->second, maxex, im->first, maxim);
 	  if (maxex <= .001) break;
@@ -886,8 +880,13 @@ void MDBalancer::prep_rebalance(int beat)
       multimap<double,mds_rank_t>::iterator im = importers.begin();
       while (ex != exporters.rend() &&
 	     im != importers.end()) {
-        double maxex = get_maxex(state, ex->second);
-	double maxim = get_maxim(state, im->second);
+        double _target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
+        double maxex = get_maxex(state, ex->second, _target_load);
+	double maxim = get_maxim(state, im->second, target_load);
+
+    dout(0) << " ex mds." << ex->second << " im mds." << im->second << dendl;
+    dout(0) << " maxex " << maxex << " maxim " << maxim << dendl;
+
 	if (maxex < .001 || maxim < .001) break;
 	try_match(state, ex->second, maxex, im->second, maxim);
 	if (maxex <= .001) ++ex;
@@ -900,8 +899,12 @@ void MDBalancer::prep_rebalance(int beat)
       multimap<double,mds_rank_t>::iterator im = importers.begin();
       while (ex != exporters.end() &&
 	     im != importers.end()) {
-        double maxex = get_maxex(state, ex->second);
-	double maxim = get_maxim(state, im->second);
+        double _target_load = is_in_rank_mask(ex->second) ? target_load : 0.0;
+        double maxex = get_maxex(state, ex->second, _target_load);
+	double maxim = get_maxim(state, im->second, target_load);
+    dout(0) << " ex mds." << ex->second << " im mds." << im->second << dendl;
+    dout(0) << " maxex " << maxex << " maxim " << maxim << dendl;
+    dout(0) << " mds_meta_load mds." << ex->second << " " << mds_meta_load[ex->second] << dendl;
 	if (maxex < .001 || maxim < .001) break;
 	try_match(state, ex->second, maxex, im->second, maxim);
 	if (maxex <= .001) ++ex;
@@ -1006,10 +1009,15 @@ void MDBalancer::try_rebalance(balance_state_t& state)
     mds_rank_t target = it.first;
     double amount = it.second;
 
-    if (amount < MIN_OFFLOAD)
+    dout(1) << " target " << target << " amount " << amount << dendl;
+    if (amount < MIN_OFFLOAD) {
+      dout(1) << " cont amount < MIN_OFFLOAD" << dendl;
       continue;
-    if (amount * 10 * state.targets.size() < target_load)
+    }
+    if (amount * 10 * state.targets.size() < target_load) {
+      dout(1) << " cont amount * 10 * starget_size " << dendl;
       continue;
+    }
 
     dout(5) << "want to send " << amount << " to mds." << target
       //<< " .. " << (*it).second << " * " << load_fac
@@ -1125,74 +1133,6 @@ void MDBalancer::try_rebalance(balance_state_t& state)
   }
 
   dout(7) << "done" << dendl;
-  mds->mdcache->show_subtrees();
-}
-
-void MDBalancer::migrate_to_masked_rank()
-{
-  mds_rank_t whoami = mds->get_nodeid();
-  std::vector<CDir*> exports;
-  double export_have = 0.0;
-
-  for (auto& dir : mds->mdcache->get_fullauth_subtrees()) {
-    CInode *diri = dir->get_inode();
-
-    if (diri->is_mdsdir())
-      continue;
-    if (diri->get_export_pin(false) != MDS_RANK_NONE)
-      continue;
-    if (dir->is_freezing() || dir->is_frozen())
-      continue;
-    if (dir->get_dir_auth().first != whoami)
-      continue;
-
-    if (dir->ino() == CEPH_INO_ROOT) {
-      set<CDir*> already_exporting;
-      find_exports(dir, dir->pop_auth_subtree.meta_load(), &exports, export_have, already_exporting);
-    } else {
-      export_have += dir->pop_auth_subtree.meta_load();
-      exports.push_back(dir);
-    }
-  }
-
-  if (exports.size() == 0)
-    return;
-
-  double total_load = 0.0;
-
-  for (const auto& target_rank: bal_rank_mask_set) {
-     total_load +=  mds_meta_load[target_rank];
-  }
-
-  // recaculate target_load
-  double target_load = (total_load + export_have) / bal_rank_mask_set.size();
-
-  dout(15) << " mds." << whoami << " try migrate target_load "
-            << target_load  << " to each rank" << dendl;
-
-  for (const auto& target_rank: bal_rank_mask_set) {
-    double export_need = target_load - mds_meta_load[target_rank];
-
-    dout(17) << " mds." << whoami << " may export " << export_need << " to mds." << target_rank << dendl;
-    for (auto it = exports.begin(); it != exports.end(); ) {
-      CDir *dir = *it;
-
-      mds->mdcache->migrator->export_dir_nicely(dir, target_rank);
-      export_need -= dir->pop_auth_subtree.meta_load();
-
-      dout(17) << "   - exporting " << dir->pop_auth_subtree
-            << " " << dir->pop_auth_subtree.meta_load()
-            << " to mds." << target_rank << " " << *dir << dendl;
-
-      it = exports.erase(it);
-
-      if (export_need < 0.0) {
-        break;
-      }
-    }
-  }
-
-  dout(15) << "migration to masked ranks done" << dendl;
   mds->mdcache->show_subtrees();
 }
 

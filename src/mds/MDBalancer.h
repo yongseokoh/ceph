@@ -102,11 +102,11 @@ private:
                    mds_rank_t ex, double& maxex,
                    mds_rank_t im, double& maxim);
 
-  double get_maxim(balance_state_t &state, mds_rank_t im) {
-    return target_load - mds_meta_load[im] - state.imported[im];
+  double get_maxim(balance_state_t &state, mds_rank_t im, double _target_load) {
+    return _target_load - mds_meta_load[im] - state.imported[im];
   }
-  double get_maxex(balance_state_t &state, mds_rank_t ex) {
-    return mds_meta_load[ex] - target_load - state.exported[ex];
+  double get_maxex(balance_state_t &state, mds_rank_t ex, double _target_load) {
+    return mds_meta_load[ex] - _target_load - state.exported[ex];
   }
 
   /**
