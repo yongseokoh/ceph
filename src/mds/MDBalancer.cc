@@ -110,9 +110,9 @@ void MDBalancer::handle_rank_mask_bits()
   std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), bal_hex_str.begin(), ::tolower);
 
   bool valid_hex = false;
+  num_mdss_in_rank_mask = 0;
   if (bal_hex_str.substr(0, 2) == "0x") {
     uint32_t quatet_sum = 0;
-    uint32_t hit_max_mds = 0;
     reverse(bal_hex_str.begin(), bal_hex_str.end());
     bal_hex_str.resize(bal_hex_str.size()-2);
     for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
@@ -124,7 +124,7 @@ void MDBalancer::handle_rank_mask_bits()
           if (quatet_value & (1 << offset)) {
             mds_rank_t masked_rank = qpos * 4 + offset;
             if (masked_rank < (mds_rank_t)last_num_mdss) {
-              hit_max_mds++;
+              num_mdss_in_rank_mask++;
             }
           }
           offset++;
@@ -135,7 +135,7 @@ void MDBalancer::handle_rank_mask_bits()
       }
     }
 
-    if (quatet_sum && hit_max_mds) {
+    if (quatet_sum && num_mdss_in_rank_mask) {
       valid_hex = true;
     }
   }
@@ -146,6 +146,7 @@ void MDBalancer::handle_rank_mask_bits()
     uint32_t max_mds_quatet_count = (MAX_MDS + 3) / 4;
     bal_hex_str.resize(max_mds_quatet_count);
     bal_hex_str.assign(max_mds_quatet_count, 'f');
+    num_mdss_in_rank_mask = last_num_mdss;
   }
 
   bal_rank_mask_set.clear();
@@ -813,10 +814,8 @@ void MDBalancer::prep_rebalance(int beat)
       load_map.insert(pair<double,mds_rank_t>( l, i ));
     }
 
-    int target_cluster_size = (int)bal_rank_mask_set.size() < cluster_size ? bal_rank_mask_set.size() : cluster_size;
-
     // target load
-    target_load = total_load / (double)target_cluster_size;
+    target_load = total_load / (double)num_mdss_in_rank_mask;
     dout(7) << "my load " << my_load
 	    << "   target " << target_load
 	    << "   total " << total_load
