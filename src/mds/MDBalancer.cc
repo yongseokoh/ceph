@@ -79,93 +79,88 @@ MDBalancer::MDBalancer(MDSRank *m, Messenger *msgr, MonClient *monc) :
   bal_fragment_dirs = g_conf().get_val<bool>("mds_bal_fragment_dirs");
   bal_fragment_interval = g_conf().get_val<int64_t>("mds_bal_fragment_interval");
   bal_rank_mask = g_conf().get_val<std::string>("mds_bal_rank_mask");
+  last_bal_rank_mask = "0x0";
+  last_num_mdss = 0;
 }
 
 void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const MDSMap& mds_map)
 {
-  if (changed.count("mds_bal_fragment_dirs"))
+  if (changed.count("mds_bal_fragment_dirs")) {
     bal_fragment_dirs = g_conf().get_val<bool>("mds_bal_fragment_dirs");
-  if (changed.count("mds_bal_fragment_interval"))
+  }
+  if (changed.count("mds_bal_fragment_interval")) {
     bal_fragment_interval = g_conf().get_val<int64_t>("mds_bal_fragment_interval");
-  if (changed.count("mds_bal_rank_mask"))
+  }
+  if (changed.count("mds_bal_rank_mask")) {
     bal_rank_mask = g_conf().get_val<std::string>("mds_bal_rank_mask");
+  }
 }
 
 void MDBalancer::handle_rank_mask_bits()
 {
-  if (bal_rank_mask == last_bal_rank_mask) {
+  if (bal_rank_mask == last_bal_rank_mask &&
+      mds->get_mds_map()->get_num_in_mds() == last_num_mdss) {
     return;
   }
   last_bal_rank_mask = bal_rank_mask;
+  last_num_mdss = mds->get_mds_map()->get_num_in_mds();
 
   bal_rank_mask_set.clear();
 
-  std::string lower_case_str;
-  lower_case_str.resize(bal_rank_mask.size());
-  std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), lower_case_str.begin(), ::tolower);
-#if 0
-  bool valid_hex = true;
+  std::string bal_hex_str;
+  bal_hex_str.resize(bal_rank_mask.size());
+  std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), bal_hex_str.begin(), ::tolower);
 
-  if (lower_case_str.substr(0, 2) != "0x") {
-    valid_hex = false;
-  } else {
-    uint32_t quatet_sum = 0;
-    for (uint32_t i = 2; i < lower_case_str.size(); i++) {
-      quatet_sum += stoul(lower_case_str.substr(i, 1), nullptr, 16);
-      if (!isxdigit(lower_case_str[i])) {
-        valid_hex = false;
-        break;
-      }
-    }
-
-    if (valid_hex && quatet_sum == 0) {
-      valid_hex = false;
-    }
-  }
-#else
   bool valid_hex = false;
-
-  if (lower_case_str.substr(0, 2) == "0x") {
+  if (bal_hex_str.substr(0, 2) == "0x") {
     uint32_t quatet_sum = 0;
-    for (uint32_t i = 2; i < lower_case_str.size(); i++) {
-      if (isxdigit(lower_case_str[i])) {
-        quatet_sum += stoul(lower_case_str.substr(i, 1), nullptr, 16);
+    uint32_t hit_max_mds = 0;
+    reverse(bal_hex_str.begin(), bal_hex_str.end());
+    bal_hex_str.resize(bal_hex_str.size()-2);
+
+    for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
+      if (isxdigit(bal_hex_str[qpos])) {
+        uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
+        quatet_sum += quatet_value;
+
+        uint32_t offset = 0;
+        while (offset < 4) {
+          if (quatet_value & (1 << offset)) {
+            mds_rank_t masked_rank = qpos * 4 + offset;
+            if (masked_rank < (mds_rank_t)last_num_mdss) {
+              hit_max_mds++;
+            }
+          }
+          offset++;
+        }
       } else {
-        valid_hex = false;
+        quatet_sum = 0;
         break;
       }
     }
 
-    // no bits are set
-    if (valid_hex && quatet_sum == 0) {
-      valid_hex = false;
+    if (quatet_sum && hit_max_mds) {
+      valid_hex = true;
     }
   }
-#endif
 
-  uint32_t quatet_count;
-  if (valid_hex) {
-    reverse(lower_case_str.begin(), lower_case_str.end());
-    quatet_count = lower_case_str.size() - 2;
-  } else {
-    quatet_count = (MAX_MDS + 3) / 4;
+  dout(2) << "mds_bal_rank_mask: " << bal_rank_mask << " (validity: " << valid_hex << ")" << dendl;
+
+  if (valid_hex == false) {
+    uint32_t max_mds_quatet_count = (MAX_MDS + 3) / 4;
+    bal_hex_str.resize(max_mds_quatet_count);
+    bal_hex_str.assign(max_mds_quatet_count, 'f');
   }
 
-  for (uint32_t i = 0; i < quatet_count; i++) {
-    uint32_t quatet_value;
-    if (valid_hex) {
-      quatet_value = stoul(lower_case_str.substr(i, 1), nullptr, 16);
-    } else {
-      quatet_value = 0xf;
-    }
-
+  uint32_t quatet_count = bal_hex_str.size();
+  for (uint32_t qpos = 0; qpos < quatet_count; qpos++) {
+    uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
     uint32_t offset = 0;
-
     while (offset < 4) {
       if (quatet_value & (1 << offset)) {
-        mds_rank_t masked_rank = i * 4 + offset;
+        mds_rank_t masked_rank = qpos * 4 + offset;
         bal_rank_mask_set.insert(masked_rank);
-        dout(17) << " Add mds." << masked_rank << " to bal_rank_mask_set."<< dendl;
+        dout(17) << "Add mds." << masked_rank << " to bal_rank_mask_set."<< dendl;
       }
       offset++;
     }
@@ -817,7 +812,6 @@ void MDBalancer::prep_rebalance(int beat)
 		<< " ~ " << l << dendl;
 
       if (whoami == i) my_load = l;
-
       total_load += l;
 
       load_map.insert(pair<double,mds_rank_t>( l, i ));
