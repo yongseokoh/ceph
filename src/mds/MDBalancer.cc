@@ -111,15 +111,21 @@ void MDBalancer::handle_rank_mask_bits()
 
   bool valid_hex = false;
   num_mdss_in_rank_mask = 0;
+
   if (bal_hex_str.substr(0, 2) == "0x") {
     uint32_t quatet_sum = 0;
+
     reverse(bal_hex_str.begin(), bal_hex_str.end());
     bal_hex_str.resize(bal_hex_str.size()-2);
+
     for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
       if (isxdigit(bal_hex_str[qpos])) {
-        uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
-        quatet_sum += quatet_value;
+        uint32_t quatet_value;
         uint32_t offset = 0;
+
+        quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
+        quatet_sum += quatet_value;
+
         while (offset < 4) {
           if (quatet_value & (1 << offset)) {
             mds_rank_t masked_rank = qpos * 4 + offset;
@@ -144,6 +150,7 @@ void MDBalancer::handle_rank_mask_bits()
 
   if (valid_hex == false) {
     uint32_t max_mds_quatet_count = (MAX_MDS + 3) / 4;
+
     bal_hex_str.resize(max_mds_quatet_count);
     bal_hex_str.assign(max_mds_quatet_count, 'f');
     num_mdss_in_rank_mask = last_num_mdss;
@@ -153,6 +160,7 @@ void MDBalancer::handle_rank_mask_bits()
   for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
     uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
     uint32_t offset = 0;
+
     while (offset < 4) {
       if (quatet_value & (1 << offset)) {
         mds_rank_t masked_rank = qpos * 4 + offset;

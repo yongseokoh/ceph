@@ -127,6 +127,7 @@ private:
   std::string last_bal_rank_mask;
   std::set<mds_rank_t> bal_rank_mask_set;
   unsigned last_num_mdss;
+  unsigned num_mdss_in_rank_mask;
 
   MDSRank *mds;
   Messenger *messenger;
