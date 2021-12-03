@@ -118,7 +118,7 @@ private:
    */
   void try_rebalance(balance_state_t& state);
   void handle_rank_mask_bits();
-  bool is_in_rank_mask(mds_rank_t rank);
+  bool test_rank_mask(mds_rank_t rank);
 
   bool bal_fragment_dirs;
   int64_t bal_fragment_interval;
