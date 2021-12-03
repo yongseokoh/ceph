@@ -124,6 +124,7 @@ private:
   int64_t bal_fragment_interval;
   static const unsigned int AUTH_TREES_THRESHOLD = 5;
   std::string bal_rank_mask;
+  std::string last_bal_rank_mask;
   std::set<mds_rank_t> bal_rank_mask_set;
 
   MDSRank *mds;

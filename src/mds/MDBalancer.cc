@@ -93,6 +93,11 @@ void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const 
 
 void MDBalancer::handle_rank_mask_bits()
 {
+  if (bal_rank_mask == last_bal_rank_mask) {
+    return;
+  }
+  last_bal_rank_mask = bal_rank_mask;
+
   bal_rank_mask_set.clear();
 
   std::string lower_case_str;
@@ -798,10 +803,10 @@ void MDBalancer::prep_rebalance(int beat)
       load_map.insert(pair<double,mds_rank_t>( l, i ));
     }
 
-    double target_cluster_size = bal_rank_mask_set.size() < cluster_size ? bal_rank_mask_set.size() : cluster_size;
+    int target_cluster_size = (int)bal_rank_mask_set.size() < cluster_size ? bal_rank_mask_set.size() : cluster_size;
 
     // target load
-    target_load = total_load / target_cluster_size;
+    target_load = total_load / (double)target_cluster_size;
     dout(7) << "my load " << my_load
 	    << "   target " << target_load
 	    << "   total " << total_load
@@ -839,14 +844,12 @@ void MDBalancer::prep_rebalance(int beat)
     for (multimap<double,mds_rank_t>::iterator it = load_map.begin();
 	 it != load_map.end();
 	 ++it) {
-      dout(0) << " mds." << it->second << " load " << it->first << " target load " << target_load << dendl;
       if (it->first < target_load && test_rank_mask(it->second)) {
 	dout(15) << "   mds." << it->second << " is importer" << dendl;
 	importers.insert(pair<double,mds_rank_t>(it->first,it->second));
 	importer_set.insert(it->second);
       } else {
 	int mds_last_epoch_under = mds_last_epoch_under_map[it->second];
-      dout(0) << " mds." << it->second << " last epoch under " << mds_last_epoch_under << " beat_epoch - mds_last_epoch_under " << 
        beat_epoch - mds_last_epoch_under << dendl;
 	if (!(mds_last_epoch_under && beat_epoch - mds_last_epoch_under < 2)) {
 	  dout(15) << "   mds." << it->second << " is exporter" << dendl;
@@ -870,7 +873,6 @@ void MDBalancer::prep_rebalance(int beat)
 	   ++ex) {
     double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
 	double maxex = get_maxex(state, ex->second, ex_target_load);
-    dout(0) << " mds." << ex->second << " maxex " << maxex << dendl;
 	if (maxex <= .001) continue;
 
 	// check importers. for now, just in arbitrary order (no intelligent matching).
@@ -878,7 +880,6 @@ void MDBalancer::prep_rebalance(int beat)
 	     im != mds_import_map[ex->second].end();
 	     ++im) {
 	  double maxim = get_maxim(state, im->first, target_load);
-      dout(0) << " mds." << im->first<< " maxim " << maxim << dendl;
 	  if (maxim <= .001) continue;
 	  try_match(state, ex->second, maxex, im->first, maxim);
 	  if (maxex <= .001) break;
@@ -898,9 +899,6 @@ void MDBalancer::prep_rebalance(int beat)
         double maxex = get_maxex(state, ex->second, ex_target_load);
 	double maxim = get_maxim(state, im->second, target_load);
 
-    dout(0) << " ex mds." << ex->second << " im mds." << im->second << dendl;
-    dout(0) << " maxex " << maxex << " maxim " << maxim << dendl;
-
 	if (maxex < .001 || maxim < .001) break;
 	try_match(state, ex->second, maxex, im->second, maxim);
 	if (maxex <= .001) ++ex;
@@ -916,9 +914,6 @@ void MDBalancer::prep_rebalance(int beat)
         double ex_target_load = test_rank_mask(ex->second) ? target_load : 0.0;
         double maxex = get_maxex(state, ex->second, ex_target_load);
 	double maxim = get_maxim(state, im->second, target_load);
-    dout(0) << " ex mds." << ex->second << " im mds." << im->second << dendl;
-    dout(0) << " maxex " << maxex << " maxim " << maxim << dendl;
-    dout(0) << " mds_meta_load mds." << ex->second << " " << mds_meta_load[ex->second] << dendl;
 	if (maxex < .001 || maxim < .001) break;
 	try_match(state, ex->second, maxex, im->second, maxim);
 	if (maxex <= .001) ++ex;
