@@ -119,25 +119,25 @@ void MDBalancer::handle_rank_mask_bits()
     bal_hex_str.resize(bal_hex_str.size()-2);
 
     for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
-      if (isxdigit(bal_hex_str[qpos])) {
-        uint32_t quatet_value;
-        uint32_t offset = 0;
-
-        quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
-        quatet_sum += quatet_value;
-
-        while (offset < 4) {
-          if (quatet_value & (1 << offset)) {
-            mds_rank_t masked_rank = qpos * 4 + offset;
-            if (masked_rank < (mds_rank_t)last_num_mdss) {
-              num_mdss_in_rank_mask++;
-            }
-          }
-          offset++;
-        }
-      } else {
+      if (!isxdigit(bal_hex_str[qpos])) {
         quatet_sum = 0;
         break;
+      }
+
+      uint32_t quatet_value;
+      uint32_t offset = 0;
+
+      quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
+      quatet_sum += quatet_value;
+
+      while (offset < 4) {
+        if (quatet_value & (1 << offset)) {
+          mds_rank_t masked_rank = qpos * 4 + offset;
+          if (masked_rank < (mds_rank_t)last_num_mdss) {
+            num_mdss_in_rank_mask++;
+          }
+        }
+        offset++;
       }
     }
 
