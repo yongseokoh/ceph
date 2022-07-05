@@ -547,7 +547,6 @@ void MDBalancer::handle_heartbeat(const cref_t<MHeartbeat> &m)
 {
   mds_rank_t who = mds_rank_t(m->get_source().num());
   dout(25) << "=== got heartbeat " << m->get_beat() << " from " << m->get_source().num() << " " << m->get_load() << dendl;
-  dout(1) << " ysoh bal_rank_mask " << mds->mdsmap->get_bal_rank_mask() << dendl;
 
   if (!mds->is_active())
     return;

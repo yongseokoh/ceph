@@ -630,7 +630,7 @@ protected:
   mds_rank_t standby_count_wanted = -1;
   std::string balancer;    /* The name/version of the mantle balancer (i.e. the rados obj name) */
 
-  std::string bal_rank_mask = "ysoh";
+  std::string bal_rank_mask;
 
   std::set<mds_rank_t> in;              // currently defined cluster
 

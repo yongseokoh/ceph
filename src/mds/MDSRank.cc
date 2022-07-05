@@ -2235,8 +2235,6 @@ void MDSRankDispatcher::handle_mds_map(
   // I am only to be passed MDSMaps in which I hold a rank
   ceph_assert(whoami != MDS_RANK_NONE);
 
-  dout(1) << "ysoh bal_rank_mask: " << mdsmap->get_bal_rank_mask() << dendl;
-
   MDSMap::DaemonState oldstate = state;
   mds_gid_t mds_gid = mds_gid_t(monc->get_global_id());
   state = mdsmap->get_state_gid(mds_gid);
