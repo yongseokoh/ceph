@@ -222,6 +222,7 @@ void MDSMap::dump(Formatter *f) const
   f->dump_bool("enabled", enabled);
   f->dump_string("fs_name", fs_name);
   f->dump_string("balancer", balancer);
+  f->dump_string("bal_rank_mask", bal_rank_mask);
   f->dump_int("standby_count_wanted", std::max(0, standby_count_wanted));
 }
 
@@ -279,6 +280,7 @@ void MDSMap::print(ostream& out) const
   out << "metadata_pool\t" << metadata_pool << "\n";
   out << "inline_data\t" << (inline_data_enabled ? "enabled" : "disabled") << "\n";
   out << "balancer\t" << balancer << "\n";
+  out << "bal_rank_mask\t" << bal_rank_mask << "\n";
   out << "standby_count_wanted\t" << std::max(0, standby_count_wanted) << "\n";
 
   multimap< pair<mds_rank_t, unsigned>, mds_gid_t > foo;
@@ -784,6 +786,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
     encode(min_compat_client, bl);
   }
   encode(required_client_features, bl);
+  encode(bal_rank_mask, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -926,6 +929,7 @@ void MDSMap::decode(bufferlist::const_iterator& p)
     }
     if (ev >= 16) {
       decode(required_client_features, p);
+      decode(bal_rank_mask, p);
     } else {
       set_min_compat_client(min_compat_client);
     }

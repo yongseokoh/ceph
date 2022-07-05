@@ -78,7 +78,6 @@ MDBalancer::MDBalancer(MDSRank *m, Messenger *msgr, MonClient *monc) :
 {
   bal_fragment_dirs = g_conf().get_val<bool>("mds_bal_fragment_dirs");
   bal_fragment_interval = g_conf().get_val<int64_t>("mds_bal_fragment_interval");
-  bal_rank_mask = g_conf().get_val<std::string>("mds_bal_rank_mask");
   last_bal_rank_mask = "0x0";
   last_num_mdss = 0;
 }
@@ -91,23 +90,20 @@ void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const 
   if (changed.count("mds_bal_fragment_interval")) {
     bal_fragment_interval = g_conf().get_val<int64_t>("mds_bal_fragment_interval");
   }
-  if (changed.count("mds_bal_rank_mask")) {
-    bal_rank_mask = g_conf().get_val<std::string>("mds_bal_rank_mask");
-  }
 }
 
 void MDBalancer::handle_rank_mask_bits()
 {
-  if (bal_rank_mask == last_bal_rank_mask &&
+  if (mds->mdsmap->get_bal_rank_mask() == last_bal_rank_mask &&
       mds->get_mds_map()->get_num_in_mds() == last_num_mdss) {
     return;
   }
-  last_bal_rank_mask = bal_rank_mask;
+  last_bal_rank_mask = mds->mdsmap->get_bal_rank_mask();
   last_num_mdss = mds->get_mds_map()->get_num_in_mds();
 
   std::string bal_hex_str;
-  bal_hex_str.resize(bal_rank_mask.size());
-  std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), bal_hex_str.begin(), ::tolower);
+  bal_hex_str.resize(last_bal_rank_mask.size());
+  std::transform(last_bal_rank_mask.begin(), last_bal_rank_mask.end(), bal_hex_str.begin(), ::tolower);
 
   bool valid_hex = false;
   num_mdss_in_rank_mask = 0;
@@ -156,7 +152,7 @@ void MDBalancer::handle_rank_mask_bits()
     num_mdss_in_rank_mask = last_num_mdss;
   }
 
-  bal_rank_mask_set.clear();
+  bal_rank_mask_set.reset();
   for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
     uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
     uint32_t offset = 0;
@@ -164,7 +160,7 @@ void MDBalancer::handle_rank_mask_bits()
     while (offset < 4) {
       if (quatet_value & (1 << offset)) {
         mds_rank_t masked_rank = qpos * 4 + offset;
-        bal_rank_mask_set.insert(masked_rank);
+        bal_rank_mask_set.set(masked_rank);
         dout(17) << "Add mds." << masked_rank << " to bal_rank_mask_set."<< dendl;
       }
       offset++;
@@ -174,9 +170,7 @@ void MDBalancer::handle_rank_mask_bits()
 
 bool MDBalancer::test_rank_mask(mds_rank_t rank)
 {
-  if (bal_rank_mask_set.find(rank) != bal_rank_mask_set.end())
-    return true;
-  return false;
+  return bal_rank_mask_set.test(rank);
 }
 
 void MDBalancer::handle_export_pins(void)
@@ -553,6 +547,7 @@ void MDBalancer::handle_heartbeat(const cref_t<MHeartbeat> &m)
 {
   mds_rank_t who = mds_rank_t(m->get_source().num());
   dout(25) << "=== got heartbeat " << m->get_beat() << " from " << m->get_source().num() << " " << m->get_load() << dendl;
+  dout(1) << " ysoh bal_rank_mask " << mds->mdsmap->get_bal_rank_mask() << dendl;
 
   if (!mds->is_active())
     return;

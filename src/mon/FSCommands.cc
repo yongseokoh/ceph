@@ -426,6 +426,19 @@ public:
           fs->mds_map.set_balancer(val);
         });
       return true;
+    } else if (var == "bal_rank_mask") {
+      if (val.empty()) {
+        ss << "unsetting the metadata balancer rank mask";
+      } else {
+        ss << "setting the metadata balancer rank mask to " << val;
+      }
+      fsmap.modify_filesystem(
+	fs->fscid,
+	[val](std::shared_ptr<Filesystem> fs)
+        {
+          fs->mds_map.set_bal_rank_mask(val);
+        });
+      return true;
     } else if (var == "max_file_size") {
       if (interr.length()) {
 	ss << var << " requires an integer value";
