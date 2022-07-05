@@ -275,6 +275,9 @@ public:
   const std::string get_balancer() const { return balancer; }
   void set_balancer(std::string val) { balancer.assign(val); }
 
+  const std::string get_bal_rank_mask() const { return bal_rank_mask; }
+  void set_bal_rank_mask(std::string val) { bal_rank_mask.assign(val); }
+
   mds_rank_t get_tableserver() const { return tableserver; }
   mds_rank_t get_root() const { return root; }
 
@@ -625,6 +628,8 @@ protected:
   mds_rank_t old_max_mds = 0; /* Value to restore when MDS cluster is marked up */
   mds_rank_t standby_count_wanted = -1;
   std::string balancer;    /* The name/version of the mantle balancer (i.e. the rados obj name) */
+
+  std::string bal_rank_mask;
 
   std::set<mds_rank_t> in;              // currently defined cluster
 
