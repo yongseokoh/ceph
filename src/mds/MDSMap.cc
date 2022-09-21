@@ -1214,6 +1214,16 @@ void MDSMap::convert_bal_rank_mask_bitset(std::string bal_hex_str)
   }
 }
 
+void MDSMap::update_num_mdss_in_rank_mask()
+{
+  num_mdss_in_rank_mask = 0;
+  for (mds_rank_t rank = 0; rank < max_mds; rank++) {
+    if (bal_rank_mask_set.test(rank)) {
+      num_mdss_in_rank_mask++;
+    }
+  }
+}
+
 void MDSMap::set_bal_rank_mask(std::string val)
 {
   if (val == bal_rank_mask && get_num_in_mds() == last_num_mdss) {

@@ -279,7 +279,8 @@ public:
   void set_bal_rank_mask(std::string val);
   bool validate_bal_rank_mask(std::string val);
   void convert_bal_rank_mask_bitset(std::string val);
-  unsigned get_num_mdss_in_rank_mask() { return num_mdss_in_rank_mask; }
+  unsigned get_num_mdss_in_rank_mask() const { return num_mdss_in_rank_mask; }
+  void update_num_mdss_in_rank_mask();
 
   mds_rank_t get_tableserver() const { return tableserver; }
   mds_rank_t get_root() const { return root; }

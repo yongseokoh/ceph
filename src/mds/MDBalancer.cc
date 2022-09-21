@@ -520,6 +520,8 @@ void MDBalancer::handle_heartbeat(const cref_t<MHeartbeat> &m)
   }
   mds_import_map[who] = m->get_import_map();
 
+  mds->mdsmap->update_num_mdss_in_rank_mask();
+
   {
     unsigned cluster_size = mds->get_mds_map()->get_num_in_mds();
     if (mds_load.size() == cluster_size) {
