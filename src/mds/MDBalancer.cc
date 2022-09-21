@@ -83,8 +83,6 @@ MDBalancer::MDBalancer(MDSRank *m, Messenger *msgr, MonClient *monc) :
 {
   bal_fragment_dirs = g_conf().get_val<bool>("mds_bal_fragment_dirs");
   bal_fragment_interval = g_conf().get_val<int64_t>("mds_bal_fragment_interval");
-  last_bal_rank_mask = "0x0";
-  last_num_mdss = 0;
 }
 
 void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const MDSMap& mds_map)
@@ -97,85 +95,9 @@ void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const 
   }
 }
 
-void MDBalancer::handle_rank_mask_bits()
-{
-  if (mds->mdsmap->get_bal_rank_mask() == last_bal_rank_mask &&
-      mds->get_mds_map()->get_num_in_mds() == last_num_mdss) {
-    return;
-  }
-  last_bal_rank_mask = mds->mdsmap->get_bal_rank_mask();
-  last_num_mdss = mds->get_mds_map()->get_num_in_mds();
-
-  std::string bal_hex_str;
-  bal_hex_str.resize(last_bal_rank_mask.size());
-  std::transform(last_bal_rank_mask.begin(), last_bal_rank_mask.end(), bal_hex_str.begin(), ::tolower);
-
-  bool valid_hex = false;
-  num_mdss_in_rank_mask = 0;
-
-  if (bal_hex_str.substr(0, 2) == "0x") {
-    uint32_t quatet_sum = 0;
-
-    reverse(bal_hex_str.begin(), bal_hex_str.end());
-    bal_hex_str.resize(bal_hex_str.size()-2);
-
-    for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
-      if (!isxdigit(bal_hex_str[qpos])) {
-        quatet_sum = 0;
-        break;
-      }
-
-      uint32_t quatet_value;
-      uint32_t offset = 0;
-
-      quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
-      quatet_sum += quatet_value;
-
-      while (offset < 4) {
-        if (quatet_value & (1 << offset)) {
-          mds_rank_t masked_rank = qpos * 4 + offset;
-          if (masked_rank < (mds_rank_t)last_num_mdss) {
-            num_mdss_in_rank_mask++;
-          }
-        }
-        offset++;
-      }
-    }
-
-    if (quatet_sum && num_mdss_in_rank_mask) {
-      valid_hex = true;
-    }
-  }
-
-  dout(2) << "mds_bal_rank_mask: " << bal_rank_mask << " (validity: " << valid_hex << ")" << dendl;
-
-  if (valid_hex == false) {
-    uint32_t max_mds_quatet_count = (MAX_MDS + 3) / 4;
-
-    bal_hex_str.resize(max_mds_quatet_count);
-    bal_hex_str.assign(max_mds_quatet_count, 'f');
-    num_mdss_in_rank_mask = last_num_mdss;
-  }
-
-  bal_rank_mask_set.reset();
-  for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
-    uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
-    uint32_t offset = 0;
-
-    while (offset < 4) {
-      if (quatet_value & (1 << offset)) {
-        mds_rank_t masked_rank = qpos * 4 + offset;
-        bal_rank_mask_set.set(masked_rank);
-        dout(17) << "Add mds." << masked_rank << " to bal_rank_mask_set."<< dendl;
-      }
-      offset++;
-    }
-  }
-}
-
 bool MDBalancer::test_rank_mask(mds_rank_t rank)
 {
-  return bal_rank_mask_set.test(rank);
+  return mds->mdsmap->get_bal_rank_mask().test(rank);
 }
 
 void MDBalancer::handle_export_pins(void)
@@ -518,8 +440,6 @@ void MDBalancer::send_heartbeat()
     em.first->second = load;
   }
 
-  handle_rank_mask_bits();
-
   // import_map -- how much do i import from whom
   map<mds_rank_t, float> import_map;
   for (auto& im : mds->mdcache->get_auth_subtrees()) {
@@ -822,7 +742,7 @@ void MDBalancer::prep_rebalance(int beat)
     }
 
     // target load
-    target_load = total_load / (double)num_mdss_in_rank_mask;
+    target_load = total_load / (double)mds->mdsmap->get_num_mdss_in_rank_mask();
     dout(7) << "my load " << my_load
 	    << "   target " << target_load
 	    << "   total " << total_load

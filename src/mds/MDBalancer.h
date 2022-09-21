@@ -117,17 +117,11 @@ private:
    * export targets message again.
    */
   void try_rebalance(balance_state_t& state);
-  void handle_rank_mask_bits();
   bool test_rank_mask(mds_rank_t rank);
 
   bool bal_fragment_dirs;
   int64_t bal_fragment_interval;
   static const unsigned int AUTH_TREES_THRESHOLD = 5;
-  std::string bal_rank_mask;
-  std::string last_bal_rank_mask;
-  std::bitset<MAX_MDS> bal_rank_mask_set;
-  unsigned last_num_mdss;
-  unsigned num_mdss_in_rank_mask;
 
   MDSRank *mds;
   Messenger *messenger;

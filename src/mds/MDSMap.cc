@@ -1173,3 +1173,68 @@ void MDSMap::set_min_compat_client(ceph_release_t version)
   std::sort(bits.begin(), bits.end());
   required_client_features = feature_bitset_t(bits);
 }
+
+const std::bitset<MAX_MDS> MDSMap::get_bal_rank_mask() const {
+  return bal_rank_mask_set;
+}
+
+bool MDSMap::validate_bal_rank_mask(std::string hex_val_str)
+{
+  for (uint32_t qpos = 0; qpos < hex_val_str.size(); qpos++) {
+    if (!isxdigit(hex_val_str[qpos])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void MDSMap::convert_bal_rank_mask_bitset(std::string bal_hex_str)
+{
+  bal_rank_mask_set.reset();
+  for (uint32_t qpos = 0; qpos < bal_hex_str.size(); qpos++) {
+    uint32_t quatet_value = stoul(bal_hex_str.substr(qpos, 1), nullptr, 16);
+    uint32_t offset = 0;
+
+    while (offset < 4) {
+      if (quatet_value & (1 << offset)) {
+        mds_rank_t masked_rank = qpos * 4 + offset;
+        bal_rank_mask_set.set(masked_rank);
+        dout(0) << "ysoh Add mds." << masked_rank << " to bal_rank_mask_set."<< dendl;
+      }
+      offset++;
+    }
+  }
+
+  if (bal_rank_mask_set.count() == 0 || bal_rank_mask_set.count() > MAX_MDS) {
+    bal_rank_mask_set.reset();
+    for (mds_rank_t rank = 0; rank < MAX_MDS; rank++) {
+      bal_rank_mask_set.set(rank);
+    }
+  }
+}
+
+void MDSMap::set_bal_rank_mask(std::string val)
+{
+  if (val == bal_rank_mask && get_num_in_mds() == last_num_mdss) {
+    return;
+  }
+
+  bal_rank_mask = val;
+  last_num_mdss = get_num_in_mds();
+
+  dout(0) << "ysoh set_bal_rank_mask " << val << dendl;
+
+  std::string bal_hex_str;
+  bal_hex_str.resize(bal_rank_mask.size());
+  std::transform(bal_rank_mask.begin(), bal_rank_mask.end(), bal_hex_str.begin(), ::tolower);
+
+  if (bal_hex_str.substr(0, 2) == "0x") {
+    reverse(bal_hex_str.begin(), bal_hex_str.end());
+    bal_hex_str.resize(bal_hex_str.size()-2);
+  }
+
+  if (validate_bal_rank_mask(bal_hex_str)) {
+    convert_bal_rank_mask_bitset(bal_hex_str);
+  }
+}
