@@ -439,7 +439,7 @@ public:
 
       std::bitset<MAX_MDS> mds_bal_mask_bitset(bin_string);
 
-      if (mds_bal_mask_bitset.count() == 0) {
+      if (mds_bal_mask_bitset.none()) {
 	ss << "at least one rank must be set";
 	return -EINVAL;
       }
