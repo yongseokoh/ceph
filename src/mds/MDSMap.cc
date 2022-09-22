@@ -1180,17 +1180,12 @@ const std::bitset<MAX_MDS> MDSMap::get_bal_rank_mask_bitset() const {
 
 void MDSMap::set_bal_rank_mask(std::string val, std::bitset<MAX_MDS> _bal_rank_mask_bitset)
 {
-  dout(0) << "ysoh set_bal_rank_mask " << _bal_rank_mask_bitset << dendl;
-  bal_rank_mask_bitset = _bal_rank_mask_bitset;
+  dout(10) << "set bal_rank_mask_bitset " << _bal_rank_mask_bitset << " with " << val << dendl;
   bal_rank_mask = val;
+  bal_rank_mask_bitset = _bal_rank_mask_bitset;
 }
 
 void MDSMap::update_num_mdss_in_rank_mask_bitset()
 {
-  num_mdss_in_rank_mask_bitset = 0;
-  for (mds_rank_t rank = 0; rank < max_mds; rank++) {
-    if (bal_rank_mask_bitset.test(rank)) {
-      num_mdss_in_rank_mask_bitset++;
-    }
-  }
+  num_mdss_in_rank_mask_bitset = bal_rank_mask_bitset.count();
 }
