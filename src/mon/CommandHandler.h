@@ -30,6 +30,7 @@ public:
    * @return 0 on success, else -EINVAL
    */
   int parse_bool(std::string_view str, bool* result, std::ostream& ss);
+  int parse_hex(std::string hex_string, std::string &bin_string, unsigned int max_bits, std::ostream& ss);
 };
 
 #endif

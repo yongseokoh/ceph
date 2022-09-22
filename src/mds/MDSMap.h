@@ -275,12 +275,10 @@ public:
   const std::string get_balancer() const { return balancer; }
   void set_balancer(std::string val) { balancer.assign(val); }
 
-  const std::bitset<MAX_MDS> get_bal_rank_mask() const;
-  void set_bal_rank_mask(std::string val);
-  bool validate_bal_rank_mask(std::string val);
-  void convert_bal_rank_mask_bitset(std::string val);
-  unsigned get_num_mdss_in_rank_mask() const { return num_mdss_in_rank_mask; }
-  void update_num_mdss_in_rank_mask();
+  const std::bitset<MAX_MDS> get_bal_rank_mask_bitset() const;
+  void set_bal_rank_mask(std::string val, std::bitset<MAX_MDS> _bal_rank_mask_bitset);
+  unsigned get_num_mdss_in_rank_mask_bitset() const { return num_mdss_in_rank_mask_bitset; }
+  void update_num_mdss_in_rank_mask_bitset();
 
   mds_rank_t get_tableserver() const { return tableserver; }
   mds_rank_t get_root() const { return root; }
@@ -633,11 +631,9 @@ protected:
   mds_rank_t standby_count_wanted = -1;
   std::string balancer;    /* The name/version of the mantle balancer (i.e. the rados obj name) */
 
-  std::bitset<MAX_MDS> bal_rank_mask_set;
   std::string bal_rank_mask;
-
-  unsigned last_num_mdss = 0;
-  unsigned num_mdss_in_rank_mask = 0;
+  std::bitset<MAX_MDS> bal_rank_mask_bitset;
+  uint32_t num_mdss_in_rank_mask_bitset;
 
   std::set<mds_rank_t> in;              // currently defined cluster
 

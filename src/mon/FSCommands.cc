@@ -425,16 +425,25 @@ public:
         });
       return true;
     } else if (var == "bal_rank_mask") {
+      string bin_string;
       if (val.empty()) {
         ss << "unsetting the metadata balancer rank mask";
+	return -EINVAL;
       } else {
+	int r = parse_hex(val, bin_string, MAX_MDS, ss);
+	if (r != 0) {
+	  return r;
+	}
         ss << "setting the metadata balancer rank mask to " << val;
       }
+
+      std::bitset<MAX_MDS> mds_bal_mask_bitset(bin_string);
+
       fsmap.modify_filesystem(
 	fs->fscid,
 	[val](std::shared_ptr<Filesystem> fs)
         {
-          fs->mds_map.set_bal_rank_mask(val);
+          fs->mds_map.set_bal_rank_mask(mds_bal_mask_bitset);
         });
       return true;
     } else if (var == "max_file_size") {

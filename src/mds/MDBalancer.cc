@@ -97,7 +97,7 @@ void MDBalancer::handle_conf_change(const std::set<std::string>& changed, const 
 
 bool MDBalancer::test_rank_mask(mds_rank_t rank)
 {
-  return mds->mdsmap->get_bal_rank_mask().test(rank);
+  return mds->mdsmap->get_bal_rank_mask_bitset().test(rank);
 }
 
 void MDBalancer::handle_export_pins(void)
@@ -520,7 +520,7 @@ void MDBalancer::handle_heartbeat(const cref_t<MHeartbeat> &m)
   }
   mds_import_map[who] = m->get_import_map();
 
-  mds->mdsmap->update_num_mdss_in_rank_mask();
+  mds->mdsmap->update_num_mdss_in_rank_mask_bitset();
 
   {
     unsigned cluster_size = mds->get_mds_map()->get_num_in_mds();
@@ -744,7 +744,7 @@ void MDBalancer::prep_rebalance(int beat)
     }
 
     // target load
-    target_load = total_load / (double)mds->mdsmap->get_num_mdss_in_rank_mask();
+    target_load = total_load / (double)mds->mdsmap->get_num_mdss_in_rank_mask_bitset();
     dout(7) << "my load " << my_load
 	    << "   target " << target_load
 	    << "   total " << total_load
