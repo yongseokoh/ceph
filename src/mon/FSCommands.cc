@@ -441,9 +441,9 @@ public:
 
       fsmap.modify_filesystem(
 	fs->fscid,
-	[val](std::shared_ptr<Filesystem> fs)
+	[val, &mds_bal_mask_bitset](std::shared_ptr<Filesystem> fs)
         {
-          fs->mds_map.set_bal_rank_mask(mds_bal_mask_bitset);
+          fs->mds_map.set_bal_rank_mask(val, mds_bal_mask_bitset);
         });
       return true;
     } else if (var == "max_file_size") {

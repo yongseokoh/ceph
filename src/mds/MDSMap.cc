@@ -1174,7 +1174,7 @@ void MDSMap::set_min_compat_client(ceph_release_t version)
   required_client_features = feature_bitset_t(bits);
 }
 
-const std::bitset<MAX_MDS> MDSMap::get_bal_rank_mask_bitset() const {
+const std::bitset<MAX_MDS>& MDSMap::get_bal_rank_mask_bitset() const {
   return bal_rank_mask_bitset;
 }
 

@@ -275,7 +275,7 @@ public:
   const std::string get_balancer() const { return balancer; }
   void set_balancer(std::string val) { balancer.assign(val); }
 
-  const std::bitset<MAX_MDS> get_bal_rank_mask_bitset() const;
+  const std::bitset<MAX_MDS>& get_bal_rank_mask_bitset() const;
   void set_bal_rank_mask(std::string val, std::bitset<MAX_MDS> _bal_rank_mask_bitset);
   unsigned get_num_mdss_in_rank_mask_bitset() const { return num_mdss_in_rank_mask_bitset; }
   void update_num_mdss_in_rank_mask_bitset();
