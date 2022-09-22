@@ -439,6 +439,11 @@ public:
 
       std::bitset<MAX_MDS> mds_bal_mask_bitset(bin_string);
 
+      if (mds_bal_mask_bitset.count() == 0) {
+	ss << "at least one rank must be set";
+	return -EINVAL;
+      }
+
       fsmap.modify_filesystem(
 	fs->fscid,
 	[val, &mds_bal_mask_bitset](std::shared_ptr<Filesystem> fs)

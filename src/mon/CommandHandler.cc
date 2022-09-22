@@ -74,13 +74,9 @@ int CommandHandler::parse_hex(std::string hex_string, std::string &bin_string, u
     return -EINVAL;
   }
 
-  if (bin_string.find("1") == std::string::npos) {
-    ss << "at least one rank must be set";
-    return -EINVAL;
+  if (bin_string.length() < max_bits) {
+    bin_string.insert(0, max_bits - bin_string.length(), '0');
   }
-
-  if (bin_string.length() < 256)
-    bin_string.insert(0, 256 - bin_string.length(), '0');
 
   std::reverse(bin_string.begin(), bin_string.end());
 
