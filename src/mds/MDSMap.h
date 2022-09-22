@@ -276,7 +276,7 @@ public:
   void set_balancer(std::string val) { balancer.assign(val); }
 
   const std::bitset<MAX_MDS>& get_bal_rank_mask_bitset() const;
-  void set_bal_rank_mask(std::string val, std::bitset<MAX_MDS> _bal_rank_mask_bitset);
+  void set_bal_rank_mask(std::string val, std::string bin_string);
   unsigned get_num_mdss_in_rank_mask_bitset() const { return num_mdss_in_rank_mask_bitset; }
   void update_num_mdss_in_rank_mask_bitset();
 
@@ -632,6 +632,7 @@ protected:
   std::string balancer;    /* The name/version of the mantle balancer (i.e. the rados obj name) */
 
   std::string bal_rank_mask;
+  std::string bal_rank_mask_bin_string;
   std::bitset<MAX_MDS> bal_rank_mask_bitset;
   uint32_t num_mdss_in_rank_mask_bitset;
 

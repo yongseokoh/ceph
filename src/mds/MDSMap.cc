@@ -788,6 +788,7 @@ void MDSMap::encode(bufferlist& bl, uint64_t features) const
   }
   encode(required_client_features, bl);
   encode(bal_rank_mask, bl);
+  encode(bal_rank_mask_bin_string, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -931,6 +932,7 @@ void MDSMap::decode(bufferlist::const_iterator& p)
     if (ev >= 16) {
       decode(required_client_features, p);
       decode(bal_rank_mask, p);
+      decode(bal_rank_mask_bin_string, p);
     } else {
       set_min_compat_client(min_compat_client);
     }
@@ -1178,14 +1180,23 @@ const std::bitset<MAX_MDS>& MDSMap::get_bal_rank_mask_bitset() const {
   return bal_rank_mask_bitset;
 }
 
-void MDSMap::set_bal_rank_mask(std::string val, std::bitset<MAX_MDS> _bal_rank_mask_bitset)
+void MDSMap::set_bal_rank_mask(std::string val, std::string bin_string)
 {
-  dout(10) << "set bal_rank_mask_bitset " << _bal_rank_mask_bitset << " with " << val << dendl;
   bal_rank_mask = val;
-  bal_rank_mask_bitset = _bal_rank_mask_bitset;
+  bal_rank_mask_bin_string = bin_string;
+  dout(10) << "set bal_rank_mask_bitset " << bal_rank_mask_bin_string << " with " << bal_rank_mask << dendl;
 }
 
 void MDSMap::update_num_mdss_in_rank_mask_bitset()
 {
-  num_mdss_in_rank_mask_bitset = bal_rank_mask_bitset.count();
+  if (bal_rank_mask_bin_string.length()) {
+    std::bitset<MAX_MDS> _mds_bal_mask_bitset(bal_rank_mask_bin_string);
+    bal_rank_mask_bitset = _mds_bal_mask_bitset;
+    num_mdss_in_rank_mask_bitset = _mds_bal_mask_bitset.count();
+  } else {
+    bal_rank_mask_bitset.set();
+    num_mdss_in_rank_mask_bitset = get_max_mds();
+  }
+
+  dout(10) << "update num_mdss_in_rank_mask_bitset to " << num_mdss_in_rank_mask_bitset << dendl;
 }

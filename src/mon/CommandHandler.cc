@@ -62,7 +62,7 @@ int CommandHandler::parse_hex(std::string hex_string, std::string &bin_string, u
     try {
       value = stoull(hex_string.substr(i, QUATETS_PER_ULLONG), nullptr, 16);
     } catch (std::invalid_argument const& ex) {
-      ss << "invalid hex value " << max_bits;
+      ss << "invalid hex value ";
       return -EINVAL;
     }
     std::bitset<BITS_PER_ULLONG> bit_str(value);
@@ -70,15 +70,13 @@ int CommandHandler::parse_hex(std::string hex_string, std::string &bin_string, u
   }
 
   if (bin_string.length() > max_bits) {
-    ss << "a value exceeds max_bits " << max_bits;
+    ss << "a value exceeds max_mds " << max_bits;
     return -EINVAL;
   }
 
   if (bin_string.length() < max_bits) {
     bin_string.insert(0, max_bits - bin_string.length(), '0');
   }
-
-  std::reverse(bin_string.begin(), bin_string.end());
 
   return 0;
 }

@@ -434,21 +434,20 @@ public:
 	if (r != 0) {
 	  return r;
 	}
-        ss << "setting the metadata balancer rank mask to " << val;
       }
 
-      std::bitset<MAX_MDS> mds_bal_mask_bitset(bin_string);
-
-      if (mds_bal_mask_bitset.none()) {
+      if (bin_string.find('1') == std::string::npos) {
 	ss << "at least one rank must be set";
 	return -EINVAL;
       }
 
+      ss << "setting the metadata balancer rank mask to " << val;
+
       fsmap.modify_filesystem(
 	fs->fscid,
-	[val, &mds_bal_mask_bitset](std::shared_ptr<Filesystem> fs)
+	[val, &bin_string](std::shared_ptr<Filesystem> fs)
         {
-          fs->mds_map.set_bal_rank_mask(val, mds_bal_mask_bitset);
+          fs->mds_map.set_bal_rank_mask(val, bin_string);
         });
       return true;
     } else if (var == "max_file_size") {
