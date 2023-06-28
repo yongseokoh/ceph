@@ -6264,6 +6264,48 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
     auto pi = cur->project_inode(mdr);
     cur->setxattr_ephemeral_dist(val);
     pip = pi.inode.get();
+  } else if (name == "ceph.dir.bal.mask"sv) {
+    if (!cur->is_dir()) {
+      respond_to_request(mdr, -CEPHFS_EINVAL);
+      return;
+    }
+
+    std::string val;
+    try {
+      val = boost::lexical_cast<std::string>(value);
+    } catch (boost::bad_lexical_cast const&) {
+      dout(10) << "bad vxattr value, unable to parse string for " << name << dendl;
+      respond_to_request(mdr, -CEPHFS_EINVAL);
+      return;
+    }
+
+    std::string bin_string;
+    if (mds->get_mds_map()->check_special_bal_rank_mask(val, MDSMap::BAL_RANK_MASK_TYPE_ANY) == false) {
+      CachedStackStringStream css;
+      int r = mds->get_mds_map()->hex2bin(val, bin_string, MAX_MDS, *css);
+      if (r != 0) {
+        dout(10) << css->str() << dendl;
+        respond_to_request(mdr, -CEPHFS_EINVAL);
+        return;
+      }
+    }
+
+    if (cur->is_root()) {
+      std::bitset<MAX_MDS> rank_mask_bitset;
+      int r = mds->balancer->hex2bin(val, rank_mask_bitset);
+      if (r != 0 || !rank_mask_bitset.test(0)) {
+        dout(10) << "bad vxattr value, rank0 must be set for root dir" << dendl;
+        respond_to_request(mdr, -CEPHFS_EINVAL);
+        return;
+      }
+    }
+
+    if (!xlock_policylock(mdr, cur))
+      return;
+
+    auto pi = cur->project_inode(mdr);
+    cur->setxattr_bal_rank_mask(val);
+    pip = pi.inode.get();
   } else {
     dout(10) << " unknown vxattr " << name << dendl;
     respond_to_request(mdr, -CEPHFS_EINVAL);
@@ -6831,6 +6873,8 @@ void Server::handle_client_getvxattr(MDRequestRef& mdr)
       // since we only handle ceph vxattrs here
       r = -CEPHFS_ENODATA; // no such attribute
     }
+  } else if (xattr_name  == "ceph.dir.bal.mask"sv) {
+    *css << cur->get_projected_inode()->bal_rank_mask;
   } else {
     // otherwise respond as invalid request
     // since we only handle ceph vxattrs here

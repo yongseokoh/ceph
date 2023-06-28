@@ -432,6 +432,12 @@ public:
 	if (r != 0) {
 	  return r;
 	}
+        std::bitset<MAX_MDS> rank_mask = std::bitset<MAX_MDS>(bin_string);
+        if (!rank_mask.test(0)) {
+          ss << "the first bit must be set for rank0";
+          return -EINVAL;
+        }
+
       }
       ss << "setting the metadata balancer rank mask to " << val;
 

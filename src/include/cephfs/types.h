@@ -65,6 +65,7 @@ typedef int32_t mds_rank_t;
 constexpr mds_rank_t MDS_RANK_NONE		= -1;
 constexpr mds_rank_t MDS_RANK_EPHEMERAL_DIST	= -2;
 constexpr mds_rank_t MDS_RANK_EPHEMERAL_RAND	= -3;
+constexpr mds_rank_t MDS_RANK_MASK              = -4;
 
 struct scatter_info_t {
   version_t version = 0;
@@ -527,6 +528,7 @@ struct inode_t {
 
   double export_ephemeral_random_pin = 0;
   bool export_ephemeral_distributed_pin = false;
+  std::string bal_rank_mask;
 
   // special stuff
   version_t version = 0;           // auth only
@@ -555,7 +557,7 @@ private:
 template<template<typename> class Allocator>
 void inode_t<Allocator>::encode(ceph::buffer::list &bl, uint64_t features) const
 {
-  ENCODE_START(19, 6, bl);
+  ENCODE_START(20, 6, bl);
 
   encode(ino, bl);
   encode(rdev, bl);
@@ -614,13 +616,14 @@ void inode_t<Allocator>::encode(ceph::buffer::list &bl, uint64_t features) const
   encode(fscrypt_auth, bl);
   encode(fscrypt_file, bl);
   encode(fscrypt_last_block, bl);
+  encode(bal_rank_mask, bl);
   ENCODE_FINISH(bl);
 }
 
 template<template<typename> class Allocator>
 void inode_t<Allocator>::decode(ceph::buffer::list::const_iterator &p)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(19, 6, 6, p);
+  DECODE_START_LEGACY_COMPAT_LEN(20, 6, 6, p);
 
   decode(ino, p);
   decode(rdev, p);
@@ -731,6 +734,10 @@ void inode_t<Allocator>::decode(ceph::buffer::list::const_iterator &p)
   if (struct_v >= 19) {
     decode(fscrypt_last_block, p);
   }
+
+  if (struct_v >= 20) {
+    decode(bal_rank_mask, p);
+  }
   DECODE_FINISH(p);
 }
 
@@ -770,6 +777,7 @@ void inode_t<Allocator>::dump(ceph::Formatter *f) const
   f->dump_int("export_pin", export_pin);
   f->dump_int("export_ephemeral_random_pin", export_ephemeral_random_pin);
   f->dump_bool("export_ephemeral_distributed_pin", export_ephemeral_distributed_pin);
+  f->dump_stream("bal_rank_mask") << bal_rank_mask;
 
   f->open_array_section("client_ranges");
   for (const auto &p : client_ranges) {
