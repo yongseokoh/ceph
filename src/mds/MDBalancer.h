@@ -80,6 +80,7 @@ public:
   int get_rank_mask_bitset(CDir *dir, std::bitset<MAX_MDS>& rank_mask_bitset, bool inherit=true);
   std::string bitmask_to_str(std::bitset<MAX_MDS> &bitmask);
   void print_auth_subtrees(std::vector<CDir*> authsubs);
+  int rank_mask_list_str_to_bitset(CInode *cur, std::string& rank_mask_list_str, std::bitset<MAX_MDS>& rank_mask_bitset, std::ostream& ss);
 
 private:
   typedef struct {

@@ -791,6 +791,7 @@ void Migrator::export_dir(CDir *dir, mds_rank_t dest)
   } else if (mds->is_cluster_degraded()) {
     dout(7) << "Cannot export to mds." << dest << " " << *dir << ": cluster degraded" << dendl;
     return;
+  // here
   } else if (dir->inode->is_system()) {
     dout(7) << "Cannot export to mds." << dest << " " << *dir << ": is a system directory" << dendl;
     return;

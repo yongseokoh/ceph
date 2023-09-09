@@ -32,6 +32,8 @@
 #include <vector>
 #include <map>
 
+#include <boost/tokenizer.hpp>
+
 using namespace std;
 
 #include "common/config.h"
@@ -115,6 +117,7 @@ void MDBalancer::handle_rank_mask(void)
       continue;
     }
 
+    dout(0) << "ysoh rank_mask_bitset" << rank_mask_bitset.to_string() << dendl;
     ceph_assert(rank_mask_bitset.count());
 
     mds_rank_t target = -1;
@@ -513,13 +516,47 @@ void MDBalancer::send_heartbeat()
   }
 }
 
+int MDBalancer::rank_mask_list_str_to_bitset(CInode *cur, std::string& rank_mask_list_str, std::bitset<MAX_MDS>& rank_mask_bitset, std::ostream& ss)
+{
+  typedef boost::tokenizer<boost::char_separator<char>> tokenizer;
+  boost::char_separator<char> sep{","};
+  tokenizer tokens{rank_mask_list_str, sep};
+  bool rank0_involved = false;
+
+  for (const auto &token : tokens) {
+    try {
+      mds_rank_t rank = std::stoi(token);
+      if (cur->is_root() && rank == 0)
+        rank0_involved = true;
+
+      if (rank < 0 || rank >= MAX_MDS) {
+        ss << "bad vxattr value, unable to parse string";
+        return -EINVAL;
+      }
+      rank_mask_bitset.set(rank);
+    } catch (const std::invalid_argument& e) {
+      ss << "bad vxattr value, unable to parse string";
+      return -EINVAL;
+    }
+  }
+
+  if (cur->is_root() and rank0_involved == false) {
+    ss << "bad vxattr value, rank0 must be set for root dir";
+    return -EINVAL;
+  }
+
+  return 0;
+}
+
 int MDBalancer::get_rank_mask_bitset(CDir *dir, std::bitset<MAX_MDS>& rank_mask_bitset, bool inherit)
 {
   std::string bal_rank_mask = dir->inode->get_rank_mask(inherit);
   int r;
-  dout(10) << dir->get_path() << " " << bal_rank_mask << dendl;
-  r = hex2bin(bal_rank_mask, rank_mask_bitset);
+  dout(7) << dir->get_path() << " " << bal_rank_mask << dendl;
+  CachedStackStringStream css;
+  r = rank_mask_list_str_to_bitset(dir->get_inode(), bal_rank_mask, rank_mask_bitset, *css);
   if (r != 0 && dir->inode->is_root()) {
+    dout(10) << css->str() << dendl;
     rank_mask_bitset = mds->mdsmap->get_bal_rank_mask_bitset();
     dout(10) << " bal_rank_mask is obtained from mdsmap " << mds->mdsmap->get_num_mdss_in_rank_mask_bitset() << 
       " " <<

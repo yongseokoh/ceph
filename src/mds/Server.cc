@@ -18,6 +18,7 @@
 #include <boost/config/warning_disable.hpp>
 #include <boost/fusion/include/std_pair.hpp>
 #include <boost/range/adaptor/reversed.hpp>
+#include <boost/tokenizer.hpp>
 
 #include "MDSRank.h"
 #include "Server.h"
@@ -6279,25 +6280,13 @@ void Server::handle_set_vxattr(MDRequestRef& mdr, CInode *cur)
       return;
     }
 
-    std::string bin_string;
-    if (mds->get_mds_map()->check_special_bal_rank_mask(val, MDSMap::BAL_RANK_MASK_TYPE_ANY) == false) {
-      CachedStackStringStream css;
-      int r = mds->get_mds_map()->hex2bin(val, bin_string, MAX_MDS, *css);
-      if (r != 0) {
-        dout(10) << css->str() << dendl;
-        respond_to_request(mdr, -CEPHFS_EINVAL);
-        return;
-      }
-    }
-
-    if (cur->is_root()) {
-      std::bitset<MAX_MDS> rank_mask_bitset;
-      int r = mds->balancer->hex2bin(val, rank_mask_bitset);
-      if (r != 0 || !rank_mask_bitset.test(0)) {
-        dout(10) << "bad vxattr value, rank0 must be set for root dir" << dendl;
-        respond_to_request(mdr, -CEPHFS_EINVAL);
-        return;
-      }
+    CachedStackStringStream css;
+    std::bitset<MAX_MDS> rank_mask_bitset;
+    int r = mds->balancer->rank_mask_list_str_to_bitset(cur, value, rank_mask_bitset, *css);
+    if (r != 0) {
+      dout(10) << css->str() << dendl;
+      respond_to_request(mdr, -CEPHFS_EINVAL);
+      return;
     }
 
     if (!xlock_policylock(mdr, cur))
