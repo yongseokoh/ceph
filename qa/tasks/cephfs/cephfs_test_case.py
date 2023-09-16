@@ -328,7 +328,7 @@ class CephFSTestCase(CephTestCase):
         else:
             log.info("No core_pattern directory set, nothing to clear (internal.coredump not enabled?)")
 
-    def _get_subtrees(self, status=None, rank=None, path=None):
+    def _get_subtrees(self, status=None, rank=None, path=None, exclude_path=None):
         if path is None:
             path = "/"
         try:
@@ -344,6 +344,8 @@ class CephFSTestCase(CephTestCase):
                         else:
                             subtrees = self.fs.rank_asok(["get", "subtrees"], status=status, rank=rank)
                         subtrees = filter(lambda s: s['dir']['path'].startswith(path), subtrees)
+                        if exclude_path:
+                            subtrees = filter(lambda s: not s['dir']['path'].startswith(exclude_path), subtrees)
                         return list(subtrees)
                     except CommandFailedError as e:
                         # Sometimes we get transient errors
@@ -354,14 +356,15 @@ class CephFSTestCase(CephTestCase):
         except contextutil.MaxWhileTries as e:
             raise RuntimeError(f"could not get subtree state from rank {rank}") from e
 
-    def _wait_subtrees(self, test, status=None, rank=None, timeout=30, sleep=2, action=None, path=None):
+    def _wait_subtrees(self, test, status=None, rank=None, timeout=30, sleep=2, action=None, path=None, exclude_path=None):
+        log.info(f'_wait_subtrees {test} {rank} {path}')
         test = sorted(test)
         try:
             with contextutil.safe_while(sleep=sleep, tries=timeout//sleep) as proceed:
                 while proceed():
-                    subtrees = self._get_subtrees(status=status, rank=rank, path=path)
+                    subtrees = self._get_subtrees(status=status, rank=rank, path=path, exclude_path=exclude_path)
+                    log.info(subtrees)
                     filtered = sorted([(s['dir']['path'], s['auth_first']) for s in subtrees])
-                    log.info("%s =?= %s", filtered, test)
                     if filtered == test:
                         # Confirm export_pin in output is correct:
                         for s in subtrees:
