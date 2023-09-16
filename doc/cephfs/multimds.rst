@@ -268,6 +268,8 @@ such as with the ``bal_rank_mask`` setting (described below). Careful
 monitoring of the file system performance and MDS is advised.
 
 
+.. _intro-bal-rank-mask:
+
 Dynamic subtree partitioning with Balancer on specific ranks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -311,3 +313,115 @@ the ``bal_rank_mask`` should be set to ``0x0``. For example:
 .. prompt:: bash #
 
     ceph fs set <fs_name> bal_rank_mask 0x0
+
+Dynamically partitionning directory trees with vxattr on a specific ranks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``bal_rank_mask`` file system setting (see also :ref:`intro-bal-rank-mask`)
+can be overridden by configuring the ``ceph.dir.bal.mask`` vxattr.
+Notably, the ``ceph.dir.bal.mask`` offers the capability to isolate particular subdirectories
+into dedicated groups of MDS ranks, whereas bal_rank_mask only allows isolation
+at the file system level, such as the root directory ``/``. It serves as a valuable
+tool for finely tuning and enhancing MDS performance in various scenarios.
+
+
+One scenario is when dealing with a large directory that proves challenging
+for a single MDS rank to handle efficiently. For example, the ``/usr`` directory
+contains many directories for multiple users. In most cases, static pinning is
+simply used to distribute subdirectories of ``/usr`` across multiple ranks. However,
+the ``/usr/share`` directory presents a unique situation with many subdirectories,
+each containing large number of files, often exceeding a million files. With
+this example with ``/usr/share/images``, processing them in one MDS is inappropriate
+due to insufficient MDS resources like MDS cache memory. Therefore,
+the ceph.dir.bal.mask can dynamically balance the workload of this large
+directory within a specific subset of ranks.
+
+
+The ``ceph.dir.bal.mask`` can also be a useful option for fine-tunning performance,
+particularly in scenarios involving large directories like ``/usr/share/images``
+and ``/usr/share/backups`` within the file system.
+While the file system setting ``bal_rank_mask`` isolates the entire ``/`` directory to
+specific ranks, it can affect performance due to each other's migration overhead.
+For example, if the file system setting``bal_rank_mask`` is set to ``0xf`` and large directories
+like ``/usr/share/images`` and ``/usr/share/backups`` exist, the load on ``/usr/share/images``
+instantaneously increases and metadata distribution occurs across ranks 0 to 3.
+Thus, users of ``/usr/share/backups`` may be affected by noisy neighbors unnecessarily.
+By distributing the two directories to MDS rank 0,1 group and MDS rank 2,3 group
+respectively through the ``ceph.dir.bal.mask``, metadata service can be provided
+without affecting the performance of other concurrent workloads.
+
+
+This option can be set via:
+
+::
+
+    setfattr -n ceph.dir.bal.mask -v 1,2 /usr/share/images
+    setfattr -n ceph.dir.bal.mask -v 3,4 /usr/share/backups
+
+
+``/usr/share/images`` and ``/usr/share/backups`` are distributed within mds rank 1~2 and 3~4, respectively.
+
+Similar to ``ceph.dir.pin``, the ``ceph.dir.bal.mask`` is also inherited from its closest parent.
+This manner involves configuring the ``ceph.dir.bal.mask`` for a directory, which consequently
+impacts all its descendants. However, the parent ``ceph.dir.bal.mask`` can be overridden
+by setting the child directory’s value. For example:
+
+::
+
+    mkdir -p /usr/share/images/jpg
+    setfattr -n ceph.dir.bal.mask -v 1,2 /usr/share/images
+    # /usr/share/images and /usr/share/images/jpg are now freely moved among mds ranks 1 and 2
+    setfattr -n ceph.dir.bal.mask -v 3,4 /usr/share/images/jpg
+    # /usr/share/images/jpg now moved among mds ranks 3 and 4
+
+
+The option can be unset via:
+
+::
+
+    setfattr -x ceph.dir.bal.mask /usr/share/images/jpg
+
+The value of the ``ceph.dir.bal.mask`` for  ``/usr/share/images/jpg`` is unset and replaced with their inherited value from
+its nearest parent. If the ``ceph.dir.bal.mask`` for ``/usr/share/images`` is configured with
+a valid value, ``/usr/share/images/jpg`` will be distributed according to its parent’s settings.
+
+This can override the file system setting ``bal_rank_mask``. For example:
+
+::
+
+    cephfs fs set cephfs bal_rank_mask 0xf
+
+
+Initially, the balancer dynamically partitions the file system within MDS rank
+0 to 3 because the ``bal_rank_mask`` is set to ``0xf``.
+
+If the ``ceph.dir.bal.mask`` for the root ``/`` directory is set to ``0,1,2,3,4,5``,
+the ``bal_rank_mask`` will be overridden. In this way, the balancer dynamically
+distributes the unpinned subtrees of the root ``/`` directory from ``0`` to ``5`` mds ranks.
+
+::
+
+    setfattr -n ceph.dir.bal.mask -v 0,1,2,3,4,5 /
+
+``ceph.dir.bal.mask`` overrides parent ``ceph.dir.pin`` and vice versa. For example:
+
+::
+
+    mkdir -p /usr/share/images/jpg
+    setfattr -n ceph.dir.pin -v 1 /usr/share/images
+    setfattr -n ceph.dir.bal.mask -v 2,3 /usr/share/images/jpg
+
+The ``/usr/share/images`` directory will be pinned to rank 1, while the ``/usr/share/images/jpg``
+directory may be dynamically split into rank 2 and 3.
+
+**Restrictions**: Since the inode of the root directory is anchored to MDS rank 0,
+it's required to include MDS rank 0 when adjusting the ceph.dir.rank.mask for the ``/`` directory.
+
+::
+
+    setfattr -n ceph.dir.pin -v 1,2 /
+    setfattr: mnt: Invalid argument
+    # failed with invalid argument error
+
+    setfattr -n ceph.dir.pin -v 0,1,2 /
+    # success
