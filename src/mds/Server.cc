@@ -18,6 +18,7 @@
 #include <boost/config/warning_disable.hpp>
 #include <boost/fusion/include/std_pair.hpp>
 #include <boost/range/adaptor/reversed.hpp>
+#include <boost/tokenizer.hpp>
 
 #include "MDSRank.h"
 #include "Server.h"
@@ -6327,6 +6328,40 @@ void Server::handle_set_vxattr(const MDRequestRef& mdr, CInode *cur)
     auto pi = cur->project_inode(mdr);
     cur->setxattr_ephemeral_dist(val);
     pip = pi.inode.get();
+  } else if (name == "ceph.dir.bal.mask"sv) {
+    if (!cur->is_dir()) {
+      respond_to_request(mdr, -CEPHFS_EINVAL);
+      return;
+    }
+
+    std::string val;
+    try {
+      val = boost::lexical_cast<std::string>(value);
+    } catch (boost::bad_lexical_cast const&) {
+      dout(10) << "bad vxattr value, unable to parse string for " << name << dendl;
+      respond_to_request(mdr, -CEPHFS_EINVAL);
+      return;
+    }
+
+    if (val == "-1") {
+      val = "";
+    } else {
+      CachedStackStringStream css;
+      std::bitset<MAX_MDS> rank_mask_bitset;
+      int r = mds->balancer->rank_mask_list_str_to_bitset(cur, value, rank_mask_bitset, *css);
+      if (r != 0) {
+        dout(10) << css->str() << dendl;
+        respond_to_request(mdr, -CEPHFS_EINVAL);
+        return;
+      }
+    }
+
+    if (!xlock_policylock(mdr, cur))
+      return;
+
+    auto pi = cur->project_inode(mdr);
+    cur->setxattr_bal_rank_mask(val);
+    pip = pi.inode.get();
   } else {
     dout(10) << " unknown vxattr " << name << dendl;
     respond_to_request(mdr, -CEPHFS_EINVAL);
@@ -6890,6 +6925,8 @@ void Server::handle_client_getvxattr(const MDRequestRef& mdr)
       // since we only handle ceph vxattrs here
       r = -CEPHFS_ENODATA; // no such attribute
     }
+  } else if (xattr_name  == "ceph.dir.bal.mask"sv) {
+    *css << cur->get_projected_inode()->bal_rank_mask;
   } else {
     // otherwise respond as invalid request
     // since we only handle ceph vxattrs here
