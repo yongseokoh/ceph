@@ -531,7 +531,8 @@ struct inode_t {
 
   double export_ephemeral_random_pin = 0;
   bool export_ephemeral_distributed_pin = false;
-  std::string bal_rank_mask;
+  // to be removed
+  //std::string bal_rank_mask;
 
   // special stuff
   version_t version = 0;           // auth only
@@ -619,7 +620,7 @@ void inode_t<Allocator>::encode(ceph::buffer::list &bl, uint64_t features) const
   encode(fscrypt_auth, bl);
   encode(fscrypt_file, bl);
   encode(fscrypt_last_block, bl);
-  encode(bal_rank_mask, bl);
+  //encode(bal_rank_mask, bl);
   ENCODE_FINISH(bl);
 }
 
@@ -738,9 +739,10 @@ void inode_t<Allocator>::decode(ceph::buffer::list::const_iterator &p)
     decode(fscrypt_last_block, p);
   }
 
+  /*
   if (struct_v >= 20) {
     decode(bal_rank_mask, p);
-  }
+  } */
   DECODE_FINISH(p);
 }
 
@@ -780,7 +782,9 @@ void inode_t<Allocator>::dump(ceph::Formatter *f) const
   f->dump_int("export_pin", export_pin);
   f->dump_int("export_ephemeral_random_pin", export_ephemeral_random_pin);
   f->dump_bool("export_ephemeral_distributed_pin", export_ephemeral_distributed_pin);
+  /*
   f->dump_string("bal_rank_mask", bal_rank_mask);
+  */
 
   f->open_array_section("client_ranges");
   for (const auto &p : client_ranges) {

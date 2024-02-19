@@ -180,6 +180,7 @@ protected:
   // be shared by CInode and log events. To update these members in CInode,
   // read-copy-update should be used.
   inode_const_ptr		inode = empty_inode;
+  // xattrs definition
   xattr_map_const_ptr		xattrs;
   old_inode_map_const_ptr	old_inodes;   // key = last, value.first = first
 };
@@ -541,6 +542,7 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
       return get_inode();
   }
 
+  // get projected xattrs
   const xattr_map_const_ptr& get_projected_xattrs() {
     if (projected_nodes.empty())
       return xattrs;
@@ -1001,7 +1003,7 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
     return !projected_parent.empty();
   }
 
-  const CInode *get_rank_mask_inode(bool inherit=true) const;
+  CInode *get_rank_mask_inode(bool inherit=true);
   mds_rank_t get_export_pin(bool inherit=true) const;
   void check_pin_policy(mds_rank_t target);
   void set_export_pin(mds_rank_t rank);
@@ -1020,6 +1022,8 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
   void maybe_ephemeral_rand(double threshold=-1.0);
   void setxattr_ephemeral_rand(double prob=0.0);
   void setxattr_bal_rank_mask(std::string val);
+  std::string get_bal_rank_mask_from_xattrs(bool projected_node=true);
+  bool check_bal_rank_mask_changed();
   bool is_ephemeral_rand() const {
     return state_test(STATE_RANDEPHEMERALPIN);
   }

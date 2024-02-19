@@ -6328,6 +6328,7 @@ void Server::handle_set_vxattr(const MDRequestRef& mdr, CInode *cur)
     auto pi = cur->project_inode(mdr);
     cur->setxattr_ephemeral_dist(val);
     pip = pi.inode.get();
+    /*
   } else if (name == "ceph.dir.bal.mask"sv) {
     if (!cur->is_dir()) {
       respond_to_request(mdr, -CEPHFS_EINVAL);
@@ -6346,7 +6347,7 @@ void Server::handle_set_vxattr(const MDRequestRef& mdr, CInode *cur)
     if (val == "-1") {
       val = "";
     } else {
-      CachedStackStringStream css;
+        CachedStackStringStream css;
       std::bitset<MAX_MDS> rank_mask_bitset;
       int r = mds->balancer->rank_mask_list_str_to_bitset(cur, value, rank_mask_bitset, *css);
       if (r != 0) {
@@ -6362,6 +6363,7 @@ void Server::handle_set_vxattr(const MDRequestRef& mdr, CInode *cur)
     auto pi = cur->project_inode(mdr);
     cur->setxattr_bal_rank_mask(val);
     pip = pi.inode.get();
+    */
   } else {
     dout(10) << " unknown vxattr " << name << dendl;
     respond_to_request(mdr, -CEPHFS_EINVAL);
@@ -6457,6 +6459,13 @@ const Server::XattrHandler Server::xattr_handlers[] = {
     validate: &Server::mirror_info_xattr_validate,
     setxattr: &Server::mirror_info_setxattr_handler,
     removexattr: &Server::mirror_info_removexattr_handler
+  },
+  {
+    xattr_name: "ceph.dir.bal.mask",
+    description: "balancer mask xattr handler",
+    validate: &Server::bal_rank_mask_xattr_validate,
+    setxattr: &Server::default_setxattr_handler,
+    removexattr: &Server::default_removexattr_handler
   },
 };
 
@@ -6620,6 +6629,30 @@ void Server::mirror_info_removexattr_handler(CInode *cur, InodeStoreBase::xattr_
   xattr_rm(xattrs, Server::MirrorXattrInfo::CLUSTER_ID);
   xattr_rm(xattrs, Server::MirrorXattrInfo::FS_ID);
 }
+
+int Server::bal_rank_mask_xattr_validate(CInode *cur, const InodeStoreBase::xattr_map_const_ptr xattrs,
+                                       XattrOp *xattr_op) {
+  int r = xattr_validate(cur, xattrs, xattr_op->xattr_name, xattr_op->op, xattr_op->flags);
+  if (r < 0)
+    return r;
+
+  if (xattr_op->op == CEPH_MDS_OP_RMXATTR) {
+    return 0;
+  }
+
+  std::string value = xattr_op->xattr_value.to_str();
+  CachedStackStringStream css;
+  std::bitset<MAX_MDS> rank_mask_bitset;
+  r = mds->balancer->rank_mask_list_str_to_bitset(cur, value, rank_mask_bitset, *css);
+  if (r != 0) {
+    dout(10) << css->str() << dendl;
+    return -CEPHFS_EINVAL;
+  }
+
+  //xattr_op->xinfo = std::make_unique<MirrorXattrInfo>(cluster_id, fs_id);
+  return 0;
+}
+
 
 void Server::handle_client_setxattr(const MDRequestRef& mdr)
 {
@@ -6925,8 +6958,10 @@ void Server::handle_client_getvxattr(const MDRequestRef& mdr)
       // since we only handle ceph vxattrs here
       r = -CEPHFS_ENODATA; // no such attribute
     }
+    /*
   } else if (xattr_name  == "ceph.dir.bal.mask"sv) {
     *css << cur->get_projected_inode()->bal_rank_mask;
+    */
   } else {
     // otherwise respond as invalid request
     // since we only handle ceph vxattrs here

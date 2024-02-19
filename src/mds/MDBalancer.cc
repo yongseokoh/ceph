@@ -160,8 +160,8 @@ void MDBalancer::handle_export_pins(void)
 
     mds_rank_t export_pin = in->get_export_pin(false);
     if (export_pin == MDS_RANK_NONE) {
-      const CInode *pin = in->get_rank_mask_inode(false);
-      std::string bal_rank_mask = pin->get_inode()->bal_rank_mask;
+      CInode *pin = in->get_rank_mask_inode(false);
+      std::string bal_rank_mask = pin->get_bal_rank_mask_from_xattrs();
       if (bal_rank_mask.size())
         export_pin = MDS_RANK_MASK;
     }
@@ -574,8 +574,8 @@ int MDBalancer::rank_mask_list_str_to_bitset(CInode *cur, std::string& rank_mask
 
 int MDBalancer::get_rank_mask_bitset(CDir *dir, std::bitset<MAX_MDS>& rank_mask_bitset, bool inherit)
 {
-  const CInode *in = dir->inode->get_rank_mask_inode(inherit);
-  std::string bal_rank_mask = in->get_inode()->bal_rank_mask;
+  CInode *in = dir->inode->get_rank_mask_inode(inherit);
+  std::string bal_rank_mask = in->get_bal_rank_mask_from_xattrs();
   int r;
 
   if (in->is_root() && bal_rank_mask.size() == 0) {

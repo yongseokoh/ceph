@@ -433,6 +433,8 @@ private:
                                     const XattrOp &xattr_op);
   void mirror_info_removexattr_handler(CInode *cur, InodeStoreBase::xattr_map_ptr xattrs,
                                        const XattrOp &xattr_op);
+  int bal_rank_mask_xattr_validate(CInode *cur, const InodeStoreBase::xattr_map_const_ptr xattrs,
+                                 XattrOp *xattr_op);
 
   static bool is_ceph_vxattr(std::string_view xattr_name) {
     return xattr_name.rfind("ceph.dir.layout", 0) == 0 ||
@@ -441,8 +443,7 @@ private:
            xattr_name == "ceph.dir.subvolume" ||
            xattr_name == "ceph.dir.pin" ||
            xattr_name == "ceph.dir.pin.random" ||
-           xattr_name == "ceph.dir.pin.distributed" ||
-           xattr_name == "ceph.dir.bal.mask";
+           xattr_name == "ceph.dir.pin.distributed";
   }
 
   static bool is_ceph_dir_vxattr(std::string_view xattr_name) {
@@ -457,8 +458,7 @@ private:
 	    xattr_name == "ceph.dir.layout.pool_namespace" ||
 	    xattr_name == "ceph.dir.pin" ||
 	    xattr_name == "ceph.dir.pin.random" ||
-	    xattr_name == "ceph.dir.pin.distributed" ||
-	    xattr_name == "ceph.dir.bal.mask");
+	    xattr_name == "ceph.dir.pin.distributed");
   }
 
   static bool is_ceph_file_vxattr(std::string_view xattr_name) {
@@ -480,7 +480,8 @@ private:
     }
 
     return xattr_name == "ceph.mirror.info" ||
-           xattr_name == "ceph.mirror.dirty_snap_id";
+           xattr_name == "ceph.mirror.dirty_snap_id" ||
+           xattr_name == "ceph.dir.bal.mask";
   }
 
   void reply_client_request(const MDRequestRef& mdr, const ref_t<MClientReply> &reply);
