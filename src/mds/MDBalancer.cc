@@ -162,7 +162,6 @@ void MDBalancer::handle_export_pins(void)
     if (export_pin == MDS_RANK_NONE) {
       CInode *pin = in->get_rank_mask_inode(false);
       std::string bal_rank_mask = pin->get_bal_rank_mask_from_xattrs();
-      dout(0) << " ysoh " << __func__ << " " << bal_rank_mask << dendl;
       if (bal_rank_mask.size())
         export_pin = MDS_RANK_MASK;
     }
@@ -304,8 +303,6 @@ void MDBalancer::tick()
     dout(15) << "tick last_sample now " << now << dendl;
     last_sample = now;
   }
-
-  dout(0) << " ysoh " << __func__ << " balance_automate " << balance_automate << dendl;
 
   // We can use duration_cast below, although the result is an int,
   // because the values from g_conf are also integers.
@@ -580,7 +577,6 @@ int MDBalancer::get_rank_mask_bitset(CDir *dir, std::bitset<MAX_MDS>& rank_mask_
   CInode *in = dir->inode->get_rank_mask_inode(inherit);
   std::string bal_rank_mask = in->get_bal_rank_mask_from_xattrs();
   int r;
-  dout(0) << " ysoh " << __func__ << " " << dir->get_path() << " bal_rank_mask " << bal_rank_mask << dendl;
 
   if (in->is_root() && bal_rank_mask.size() == 0) {
     rank_mask_bitset = mds->mdsmap->get_bal_rank_mask_bitset();
@@ -654,8 +650,6 @@ void MDBalancer::handle_heartbeat(const cref_t<MHeartbeat> &m)
       return;
     }
   }
-
-  dout(0) << " ysoh " << __func__ << dendl;
 
   mds->mdsmap->update_num_mdss_in_rank_mask_bitset();
 
@@ -1476,8 +1470,8 @@ void MDBalancer::hit_dir(CDir *dir, int type, double amount)
   const bool hot = (v > g_conf()->mds_bal_split_rd && type == META_POP_IRD) ||
                    (v > g_conf()->mds_bal_split_wr && type == META_POP_IWR);
 
-  //dout(20) << type << " pop is " << v << ", frag " << dir->get_frag()
-   //        << " size " << dir->get_frag_size() << " " << dir->pop_me << dendl;
+  dout(20) << type << " pop is " << v << ", frag " << dir->get_frag()
+           << " size " << dir->get_frag_size() << " " << dir->pop_me << dendl;
 
   maybe_fragment(dir, hot);
 
@@ -1489,7 +1483,7 @@ void MDBalancer::hit_dir(CDir *dir, int type, double amount)
     dir_pop += v * 10;
     dir->last_popularity_sample = last_sample;
 
-    //dout(20) << type << " pop " << dir_pop << " spread in " << *dir << dendl;
+    dout(20) << type << " pop " << dir_pop << " spread in " << *dir << dendl;
     if (dir->is_auth() && !dir->is_ambiguous_auth() && dir->can_rep()) {
       if (dir_pop >= g_conf()->mds_bal_replicate_threshold) {
 	// replicate
