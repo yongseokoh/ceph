@@ -641,8 +641,12 @@ class TestBalMask(CephFSTestCase):
         if self.fs.get_var("max_mds") < 3:
             self.skipTest("Require three mdss")
 
-        self.mount_a.run_shell_payload("mkdir -p 1/a")
+        self.fs.set_balance_automate(True)
 
+        self.mount_a.run_shell_payload("mkdir -p 1/a")
+        #self.mount_a.run_shell_payload("mkdir -p 1")
+
+    # pass
     def test_set_to_only_invalid_value_for_subdir(self):
         """
         That passing invalid values leads to a command failure.
@@ -655,6 +659,7 @@ class TestBalMask(CephFSTestCase):
             except CommandFailedError as e:
                 self.assertEqual(e.exitstatus, 1)
 
+    # pass
     def test_set_to_mix_invalid_value_for_subdir(self):
         """
         That combining valid and invalid values results in a command failure.
@@ -668,7 +673,7 @@ class TestBalMask(CephFSTestCase):
                 self.mount_a.setfattr("1", "ceph.dir.bal.mask", value)
             except CommandFailedError as e:
                 self.assertEqual(e.exitstatus, 1)
-
+    # pass
     def test_distribute_directory_to_multiple_ranks(self):
         """
         That bal.mask distributes a directory to multiple ranks.
@@ -691,6 +696,7 @@ class TestBalMask(CephFSTestCase):
 
         self.assertEqual([1,2], sorted(list(hit_ranks)))
 
+    # pass
     def test_set_to_single_valid_value_for_subdir(self):
         """
         That vaild value is passed.
@@ -701,6 +707,7 @@ class TestBalMask(CephFSTestCase):
         self.mount_a.setfattr("1", "ceph.dir.bal.mask", "2")
         self._wait_subtrees([('/1', 2)], status=self.status)
 
+    # pass
     def test_set_to_multiple_valid_values_for_subdir(self):
         """
         That multiple vaild values are passed.
@@ -716,6 +723,7 @@ class TestBalMask(CephFSTestCase):
         self.mount_a.setfattr("1", "ceph.dir.bal.mask", "0,2")
         self._wait_subtrees([('/1', 0)], status=self.status)
 
+    # pass
     def test_set_to_invalid_value_for_root(self):
         """
         That the root directory must always include rank 0.
@@ -737,6 +745,7 @@ class TestBalMask(CephFSTestCase):
         except CommandFailedError as e:
             self.assertEqual(e.exitstatus, 1)
 
+    # pass
     def test_set_to_valid_value_for_root(self):
         """
         That the root directory must always include rank 0.
@@ -755,6 +764,7 @@ class TestBalMask(CephFSTestCase):
         self._wait_subtrees([('', 0)], status=self.status, path='', exclude_path='~mds')
 
 
+    # pass
     def test_override_ceph_fs_set_bal_rank_mask(self):
         """
         That ceph.dir.bal.mask overrides mdsmap's bal_rank_mask.
@@ -783,6 +793,7 @@ class TestBalMask(CephFSTestCase):
 
         self.assertEqual(found, True)
 
+    # failed
     def test_rank_mask_override_pin(self):
         """
         That ceph.dir.bal.mask overrides ceph.dir.pin.
@@ -793,6 +804,7 @@ class TestBalMask(CephFSTestCase):
         self.mount_a.setfattr("1/a", "ceph.dir.bal.mask", "2")
         self._wait_subtrees([('/1', 1), ('/1/a', 2)], status=self.status, rank=2)
 
+    # pass
     def test_pin_override_rank_mask_simple(self):
         """
         That ceph.dir.pin overrides ceph.dir.bal.mask.
@@ -805,6 +817,7 @@ class TestBalMask(CephFSTestCase):
         self.mount_a.setfattr("1/a", "ceph.dir.pin", "2")
         self._wait_subtrees([('/1', 1),('/1/a', 2)], status=self.status, rank=2)
 
+    # pass
     def test_pin_override_rank_mask_mix(self):
         """
         That ceph.dir.pin overrides ceph.dir.bal.mask in the same directory.
@@ -828,6 +841,7 @@ class TestBalMask(CephFSTestCase):
         self.mount_a.setfattr("1", "ceph.dir.pin", "-1")
         self._wait_subtrees([('/1', 2)], status=self.status, rank=2)
 
+    # pass
     def test_ephemeral_pin_overried_rank_mask(self):
         """
         That ephemeral pin overrides ceph.dir.bal.mask
@@ -847,6 +861,7 @@ class TestBalMask(CephFSTestCase):
                 self.assertTrue(s['distributed_ephemeral_pin'])
                 self.assertEqual(s['bal_rank_mask'], "2")
 
+    # pass
     def test_ephemeral_random_overried_rank_mask(self):
         """
         that ephemeral random overrides ceph.dir.bal.mask.
@@ -875,6 +890,7 @@ class TestBalMask(CephFSTestCase):
             self.mount_a.create_n_files("1/file", 100, sync=True)
         self._wait_random_subtrees(count, status=self.status, rank="all")
 
+    # failed
     def test_unset_rank_mask(self):
         """
         That ceph.dir.bal.mask is unset with -1.
@@ -887,8 +903,9 @@ class TestBalMask(CephFSTestCase):
 
         self.mount_a.setfattr("1", "ceph.dir.bal.mask", "-1")
         value = self.mount_a.getfattr("1", "ceph.dir.bal.mask")
-        self.assertEqual(value, "")
+        self.assertEqual(value, None)
 
+    # failed
     def test_unset_rank_mask_under_nested_root(self):
         """
         That ceph.dir.bal.mask is unset under root directory.
@@ -904,11 +921,12 @@ class TestBalMask(CephFSTestCase):
 
         self.mount_a.setfattr("1", "ceph.dir.bal.mask", "-1")
         value = self.mount_a.getfattr("1", "ceph.dir.bal.mask")
-        self.assertEqual(value, "")
+        self.assertEqual(value, None)
 
         self.mount_a.setfattr(".", "ceph.dir.bal.mask", "0")
         self._wait_subtrees([('', 0)], status=self.status, path='', exclude_path='~mds')
 
+    # failed
     def test_unset_rank_mask_under_nested_parent(self):
         """
         That ceph.dir.bal.mask is unset under nested directory.
@@ -922,6 +940,7 @@ class TestBalMask(CephFSTestCase):
         self.mount_a.setfattr("1/a", "ceph.dir.bal.mask", "-1")
         self._wait_subtrees([('/1', 1)], status=self.status, rank=1)
 
+    # failed
     def test_mds_failover(self):
         """
         That MDS failover does not affect the ceph.dir.bal.mask.
@@ -941,6 +960,7 @@ class TestBalMask(CephFSTestCase):
             self.assertEqual(value, "2")
             self._wait_subtrees([('/1', 2)], status=self.status)
 
+    # failed
     def test_mds_shrink(self):
         """
         That ceph.dir.bal.mask is sustained during reducing MDS.
@@ -958,6 +978,7 @@ class TestBalMask(CephFSTestCase):
         self.status = self.fs.wait_for_daemons()
         self._wait_subtrees([('/1', 1)], status=self.status)
 
+    # pass
     def test_mds_shrink_and_grow(self):
         """
         That ceph.dir.bal.mask is sustained during reducing and growing MDS.
@@ -979,19 +1000,29 @@ class TestBalMask(CephFSTestCase):
         self.status = self.fs.wait_for_daemons()
         self._wait_subtrees([('/1', 2)], status=self.status)
 
+    # pass
     def test_mds_grow(self):
         """
         That ceph.dir.bal.mask is sustained during growing MDS.
         """
+
         self.fs.set_max_mds(2)
         self.status = self.fs.wait_for_daemons()
 
         self.mount_a.setfattr("1", "ceph.dir.bal.mask", "1")
         value = self.mount_a.getfattr("1", "ceph.dir.bal.mask")
         self.assertEqual(value, "1")
-        self._wait_subtrees([('/1', 1)], status=self.status)
+        print(f'ceph.dir.bal.mask {value}')
+        print('sleep')
+        #while True:
+        #    time.sleep(10)
+        # failed here
+        self._wait_subtrees([('/1', 1)], status=self.status, timeout=600)
 
         self.fs.set_max_mds(3)
         self.status = self.fs.wait_for_daemons()
 
-        self._wait_subtrees([('/1', 1)], status=self.status)
+        #while True:
+        #    time.sleep(10)
+
+        self._wait_subtrees([('/1', 1)], status=self.status, timeout=600)

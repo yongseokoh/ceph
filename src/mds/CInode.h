@@ -1023,7 +1023,7 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
   void setxattr_ephemeral_rand(double prob=0.0);
   void setxattr_bal_rank_mask(std::string val);
   std::string get_bal_rank_mask_from_xattrs(bool projected_node=true);
-  bool check_bal_rank_mask_changed();
+  //bool check_bal_rank_mask_changed();
   bool is_ephemeral_rand() const {
     return state_test(STATE_RANDEPHEMERALPIN);
   }

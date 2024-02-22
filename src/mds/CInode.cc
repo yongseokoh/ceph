@@ -491,11 +491,29 @@ void CInode::pop_and_dirty_projected_inode(LogSegment *ls, const MutationRef& mu
   bool pin_updated = (get_inode()->export_pin != front.inode->export_pin) ||
 		     (get_inode()->export_ephemeral_distributed_pin !=
 		      front.inode->export_ephemeral_distributed_pin);
-  bool bal_rank_mask_updated = check_bal_rank_mask_changed();
+
+  std::string projected_bal_rank_mask;
+  const auto& pxattrs = front.xattrs;
+  if (pxattrs) {
+    auto it = pxattrs->find("ceph.dir.bal.mask");
+    if (it != pxattrs->end()) {
+        projected_bal_rank_mask = it->second.c_str();
+    }
+  }
+
+  // 여기서 잘 못 되었네
+  bool bal_rank_mask_updated = projected_bal_rank_mask != get_bal_rank_mask_from_xattrs(false);
+
+  //if (bal_rank_mask_updated)
+  dout(0) << " ysoh " << __func__ << " ceph.dir.bal.mask updated " << bal_rank_mask_updated << dendl;
+  dout(0) << " ysoh " << __func__ << " ceph.dir.bal.mask1 projected: " << get_bal_rank_mask_from_xattrs(true) << dendl;
+  dout(0) << " ysoh " << __func__ << " ceph.dir.bal.mask2: " << get_bal_rank_mask_from_xattrs(false) << dendl;
 
   reset_inode(std::move(front.inode));
-  if (front.xattrs != get_xattrs())
+  if (front.xattrs != get_xattrs()) {
     reset_xattrs(std::move(front.xattrs));
+    dout(0) << " ysoh " << __func__ << " xattrs changed " << dendl;
+  }
 
   if (front.snapnode != projected_inode::UNDEF_SRNODE) {
     --num_projected_srnodes;
@@ -2059,6 +2077,8 @@ void CInode::encode_lock_ixattr(bufferlist& bl)
 
 void CInode::decode_lock_ixattr(bufferlist::const_iterator& p)
 {
+  std::string prev_bal_rank_mask = get_bal_rank_mask_from_xattrs(false);
+
   ceph_assert(!is_auth());
   auto _inode = allocate_inode(*get_inode());
   DECODE_START(2, p);
@@ -2073,6 +2093,9 @@ void CInode::decode_lock_ixattr(bufferlist::const_iterator& p)
   }
   DECODE_FINISH(p);
   reset_inode(std::move(_inode));
+
+  std::string bal_rank_mask = get_bal_rank_mask_from_xattrs(false);
+  maybe_export_pin(prev_bal_rank_mask != bal_rank_mask);
 }
 
 void CInode::encode_lock_isnap(bufferlist& bl)
@@ -2128,7 +2151,6 @@ void CInode::encode_lock_ipolicy(bufferlist& bl)
     encode(get_inode()->export_pin, bl);
     encode(get_inode()->export_ephemeral_distributed_pin, bl);
     encode(get_inode()->export_ephemeral_random_pin, bl);
-    //encode(get_inode()->bal_rank_mask, bl);
   }
   ENCODE_FINISH(bl);
 }
@@ -2151,20 +2173,24 @@ void CInode::decode_lock_ipolicy(bufferlist::const_iterator& p)
       decode(_inode->export_ephemeral_distributed_pin, p);
       decode(_inode->export_ephemeral_random_pin, p);
     }
-    /*
-    if (struct_v >= 3) {
-      decode(_inode->bal_rank_mask, p);
-    }*/
   }
   DECODE_FINISH(p);
 
   bool pin_updated = (get_inode()->export_pin != _inode->export_pin) ||
 		     (get_inode()->export_ephemeral_distributed_pin !=
 		      _inode->export_ephemeral_distributed_pin);
+
   /*
-  bool bal_rank_mask_updated = get_inode()->bal_rank_mask!= _inode->bal_rank_mask;
+  const auto& pxattrs = _inode->xattrs;
+  std::string bal_rank_mask;
+  auto it = pxattrs->find("ceph.dir.bal.mask");
+  if (it != pxattrs->end()) {
+     bal_rank_mask(it->second.c_str(), it->second.length());
+  }
+  bool bal_rank_mask_updated = get_bal_rank_mask_from_xattrs(false) != bal_rank_mask;
   pin_updated |= bal_rank_mask_updated;
   */
+
   reset_inode(std::move(_inode));
   maybe_export_pin(pin_updated);
 }
@@ -5325,13 +5351,13 @@ void CInode::maybe_export_pin(bool update)
   }
 
   if (export_pin == MDS_RANK_NONE) {
-    return;
     CInode *in = get_rank_mask_inode(false);
     std::string bal_rank_mask = in->get_bal_rank_mask_from_xattrs();
     if (bal_rank_mask.size() == 0 && !update) {
      return;
     }
     export_pin = MDS_RANK_MASK;
+    dout(0) << " ysoh " << __func__ << " export_pin " << export_pin << dendl;
   }
 
   check_pin_policy(export_pin);
@@ -5429,33 +5455,34 @@ void CInode::setxattr_ephemeral_dist(bool val)
   _get_projected_inode()->export_ephemeral_distributed_pin = val;
 }
 
-/*
-void CInode::setxattr_bal_rank_mask(std::string val)
-{
-  ceph_assert(is_dir());
-  _get_projected_inode()->bal_rank_mask = val;
-}*/
-
 std::string CInode::get_bal_rank_mask_from_xattrs(bool projected_node)
 {
   //const auto& pxattrs = projected_node ? get_projected_xattrs() : get_xattrs();
-  const auto& pxattrs = get_projected_xattrs();
+  const auto& pxattrs = (projected_node && !projected_nodes.empty())? projected_nodes.front().xattrs : get_xattrs();
+  dout(0) << " ysoh " << __func__ << " empty " << projected_nodes.empty() << dendl;
+  //
+  //const xattr_map_const_ptr& pxattrs; // = projected_node ? get_projected_xattrs() : get_xattrs();
+  /*if (projected_nodes.empty() || !projected_node)
+    pxattrs = xattrs;
+  else
+    pxattrs = projected_nodes.front().xattrs;
+    */
+
   if (pxattrs) {
-    // replace with find()
-    for (const auto& p : *pxattrs) {
-      if (p.first == "ceph.dir.bal.mask") {
-        std::string val(p.second.c_str(), p.second.length());
+    auto it = pxattrs->find("ceph.dir.bal.mask");
+    if (it != pxattrs->end()) {
+        std::string val(it->second.c_str(), it->second.length());
+        dout(0) << " ysoh " << __func__ << " " << val << dendl;
         return val;
-      }
     }
   }
   return "";
 }
 
-bool CInode::check_bal_rank_mask_changed()
-{
-  return get_bal_rank_mask_from_xattrs(true) != get_bal_rank_mask_from_xattrs(false);
-}
+//bool CInode::check_bal_rank_mask_changed()
+//{
+//  return get_bal_rank_mask_from_xattrs(true) != get_bal_rank_mask_from_xattrs(false);
+//}
 
 CInode *CInode::get_rank_mask_inode(bool inherit)
 {

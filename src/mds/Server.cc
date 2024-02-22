@@ -6464,7 +6464,7 @@ const Server::XattrHandler Server::xattr_handlers[] = {
     xattr_name: "ceph.dir.bal.mask",
     description: "balancer mask xattr handler",
     validate: &Server::bal_rank_mask_xattr_validate,
-    setxattr: &Server::default_setxattr_handler,
+    setxattr: &Server::bal_rank_mask_setxattr_handler,
     removexattr: &Server::default_removexattr_handler
   },
 };
@@ -6641,16 +6641,27 @@ int Server::bal_rank_mask_xattr_validate(CInode *cur, const InodeStoreBase::xatt
   }
 
   std::string value = xattr_op->xattr_value.to_str();
+  if (value == "-1")
+    return 0;
+
   CachedStackStringStream css;
   std::bitset<MAX_MDS> rank_mask_bitset;
   r = mds->balancer->rank_mask_list_str_to_bitset(cur, value, rank_mask_bitset, *css);
   if (r != 0) {
-    dout(10) << css->str() << dendl;
+    dout(10) << __func__ << " invalid value " << css->str() << dendl;
     return -CEPHFS_EINVAL;
   }
 
   //xattr_op->xinfo = std::make_unique<MirrorXattrInfo>(cluster_id, fs_id);
   return 0;
+}
+
+void Server::bal_rank_mask_setxattr_handler(CInode *cur, InodeStoreBase::xattr_map_ptr xattrs,
+                                      const XattrOp &xattr_op) {
+  if (xattr_op.xattr_value.to_str() != "-1")
+    xattr_set(xattrs, xattr_op.xattr_name, xattr_op.xattr_value);
+  else
+    xattr_rm(xattrs, xattr_op.xattr_name);
 }
 
 

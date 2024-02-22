@@ -435,6 +435,8 @@ private:
                                        const XattrOp &xattr_op);
   int bal_rank_mask_xattr_validate(CInode *cur, const InodeStoreBase::xattr_map_const_ptr xattrs,
                                  XattrOp *xattr_op);
+  void bal_rank_mask_setxattr_handler(CInode *cur, InodeStoreBase::xattr_map_ptr xattrs,
+                                      const XattrOp &xattr_op);
 
   static bool is_ceph_vxattr(std::string_view xattr_name) {
     return xattr_name.rfind("ceph.dir.layout", 0) == 0 ||
