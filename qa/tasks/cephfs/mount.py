@@ -762,6 +762,7 @@ class CephFSMount(object):
         ])
 
     def _run_python(self, pyscript, py_version='python3', sudo=False):
+        print('_run_python ysoh')
         args, omit_sudo = [], True
         if sudo:
             args.append('sudo')
@@ -771,7 +772,8 @@ class CephFSMount(object):
                                       stdout=StringIO(), omit_sudo=omit_sudo)
 
     def run_python(self, pyscript, py_version='python3', sudo=False):
-        p = self._run_python(pyscript, py_version, sudo=sudo)
+        #p = self._run_python(pyscript, py_version, sudo=sudo)
+        p = self._run_python(pyscript, py_version)
         p.wait()
         return p.stdout.getvalue().strip()
 
@@ -1343,6 +1345,7 @@ class CephFSMount(object):
 
             try:
                 dirfd = os.open(dpath, os.O_DIRECTORY)
+                print('3')
 
                 for i in range(n):
                     fpath = os.path.join(dpath, f"{{fnameprefix}}_{{i}}")
