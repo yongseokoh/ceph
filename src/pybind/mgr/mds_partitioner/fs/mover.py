@@ -1,7 +1,6 @@
 from .exception import MDSPartException
 from .util import get_max_mds, WorkQueue, set_bal_rank_mask
-from .analyzer import SubdirState
-from .workload_table import MoveType
+from .workload_table import MoveType, SubdirState
 from enum import Enum, unique
 from prettytable import PrettyTable
 import queue
@@ -20,6 +19,7 @@ class MoverCtxState(Enum):
     READY       = 1
     RUNNING     = 2
     DONE        = 3
+    FAILED      = 4
 
 class MoverContext:
     def __init__(self, fs_name, func, policy_mgr):
@@ -51,28 +51,29 @@ class MoverContext:
 
     def run(self):
         self.set_state(MoverCtxState.RUNNING)
+        try:
+            while not self.job_queue.empty():
+                if self.stopping.is_set():
+                    break
 
-        while not self.job_queue.empty():
-            if self.stopping.is_set():
-                break
+                job = self.job_queue.get()
+                log.debug(f'MoverContext: {job} ')
+                (fs_name, subtree_path, target_rank, rank_mask, move_type) = job
+                self.func(fs_name, subtree_path, target_rank, rank_mask, move_type)
+                self.policy_mgr.update_subtree_state(self.policy_name, subtree_path, SubdirState.DONE.name)
 
-            job = self.job_queue.get()
-            log.debug(f'MoverContext: {job} ')
-            (fs_name, subtree_path, target_rank, rank_mask, move_type) = job
-            # main function
-            self.func(fs_name, subtree_path, target_rank, rank_mask, move_type)
+                with self.lock:
+                    self.processed_jobs += 1
 
-            # update subtree state
-            self.policy_mgr.update_subtree_state(self.policy_name, subtree_path, SubdirState.DONE.name)
-
-            with self.lock:
-                self.processed_jobs += 1
-
-        self.terminated.set()
-
-        self.set_state(MoverCtxState.DONE)
-        self.policy_mgr.create_or_update_history(self.policy_name, 'mover')
-        self.policy_mgr.freeze_history()
+            self.policy_mgr.create_or_update_history(self.policy_name, 'mover')
+            self.policy_mgr.freeze_history()
+        except Exception:
+            self.set_state(MoverCtxState.FAILED)
+            raise
+        else:
+            self.set_state(MoverCtxState.DONE)
+        finally:
+            self.terminated.set()
 
     def status(self, output_format='dict'):
         with self.lock:
@@ -97,12 +98,10 @@ class MoverContext:
     def stop(self):
         log.debug(f'stop() state {self.state.name}')
         with self.lock:
-            if self.state == MoverCtxState.READY or self.state == MoverCtxState.RUNNING:
-                self.stopping.set()
-                log.debug('wating until mover thread is terminated')
-                self.terminated.wait()
-            else:
-                log.debug('mover has already stopped.')
+            if self.state == MoverCtxState.INITIALIZED:
+                return
+            self.stopping.set()
+        self.terminated.wait()
 
 class Mover:
     def __init__(self, mgr, vxattr, subtree_ctx, fs_name, policy_mgr):
@@ -130,11 +129,15 @@ class Mover:
             if context:
                 context.stop()
 
+    def close(self):
+        self.stop()
+        self.wq.stop()
+
     def start(self, policy_name):
         with self.lock:
-            self.context.set_policy(policy_name)
             status = self.context.status()
-            if status['status'] != MoverCtxState.INITIALIZED.name and status['status'] != MoverCtxState.DONE.name:
+            if status['status'] not in [MoverCtxState.INITIALIZED.name, MoverCtxState.DONE.name,
+                                       MoverCtxState.FAILED.name]:
                 msg = f'mover has been already started status {status["status"]}'
                 return False, msg
 
@@ -152,9 +155,12 @@ class Mover:
             log.debug(f'make mover jobs {len(job_list)}')
 
             if len(job_list):
+                # Each run owns its queue, counters and completion events.
+                self.context = MoverContext(self.fs_name, self._move_subtree, self.policy_mgr)
+                self.context.set_policy(policy_name)
                 self.context.add_jobs(job_list)
-                self.wq.enqueue(self.context)
                 self.context.set_state(MoverCtxState.READY)
+                self.wq.enqueue(self.context)
                 return True, 'mover is invoked'
 
             return False, 'no subtress to move'
@@ -170,26 +176,25 @@ class Mover:
         log.debug(f'Failed to set {key} to {val} for {subtree_path}')
         return False
 
-    def _wait_subtree(self, fs_name, subtree_path, target_rank, check_wait=5, timeout=600, check_pin=True):
-            mds_slow_request = False
-            for _ in range(timeout//check_wait):
-                if check_pin:
-                    res = self._check_subtree_pinned(fs_name, subtree_path)
-                else:
-                    res = self._check_subtree_auth(fs_name, subtree_path, target_rank)
+    def _wait_subtree(self, fs_name, subtree_path, target_rank, *, check_wait=5, timeout=600, check_pin=True):
+        for _ in range(timeout//check_wait):
+            if check_pin:
+                res = self._check_subtree_pinned(fs_name, subtree_path)
+            else:
+                res = self._check_subtree_auth(fs_name, subtree_path, target_rank)
 
-                if res:
-                    log.debug(f"subtree {subtree_path} is moved to {target_rank}.")
-                    return
+            if res:
+                log.debug(f"subtree {subtree_path} is moved to {target_rank}.")
+                return
 
-                time.sleep(check_wait)
+            time.sleep(check_wait)
 
-                if self._check_mds_slow_ops():
-                    raise MDSPartException(-errno.ETIMEDOUT, \
-                            f'MDS_SLOW_REQUEST occured during moving {subtree_path} to {target_rank}')
+            if self._check_mds_slow_ops():
+                raise MDSPartException(-errno.ETIMEDOUT,
+                                       f'MDS_SLOW_REQUEST occured during moving {subtree_path} to {target_rank}')
 
-            raise MDSPartException(-errno.ETIMEDOUT, \
-                    f'{subtree_path} is not moved to {target_rank} during {timeout}')
+        raise MDSPartException(-errno.ETIMEDOUT,
+                               f'{subtree_path} is not moved to {target_rank} during {timeout}')
 
     def _move_subtree(self, fs_name, subtree_path, target_rank, rank_mask, move_type, check_wait=5, timeout=600, health_check=False):
         if health_check:
@@ -197,10 +202,11 @@ class Mover:
 
         res = self._set_and_verify_vxattr(fs_name, subtree_path, 'ceph.dir.pin', str(target_rank))
         if res == False:
-            return
+            raise MDSPartException(-errno.ETIMEDOUT, f'Failed to set ceph.dir.pin for {subtree_path}')
 
         if move_type == MoveType.PIN.name:
-            self._wait_subtree(fs_name, subtree_path, check_wait, timeout, check_pin=True)
+            self._wait_subtree(fs_name, subtree_path, target_rank,
+                               check_wait=check_wait, timeout=timeout, check_pin=True)
         elif move_type == MoveType.BAL_RANK_MASK.name:
             log.debug(f'set bal_rank_mask {rank_mask} for {subtree_path}')
             set_bal_rank_mask(self.mgr, fs_name, rank_mask)
@@ -209,8 +215,10 @@ class Mover:
             log.debug(f'set ceph.dir.bal.mask to {rank_mask} for {subtree_path}')
             res = self._set_and_verify_vxattr(fs_name, subtree_path, 'ceph.dir.bal.mask', str(rank_mask))
             if res == False:
-                return
-            self._wait_subtree(fs_name, subtree_path, check_wait, timeout, check_pin=False)
+                raise MDSPartException(-errno.ETIMEDOUT, f'Failed to set ceph.dir.bal.mask for {subtree_path}')
+            # Mask-based jobs unpin the directory (target_rank == -1).
+            # The balancer distributes it asynchronously across the mask;
+            # there is no single target rank whose authority we can await.
 
     def _wait_health_ok(self, timeout=300, timewait=10):
         while True:

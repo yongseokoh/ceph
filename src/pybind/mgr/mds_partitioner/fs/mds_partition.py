@@ -34,6 +34,12 @@ class PartContext:
     def __repr__(self):
         return f'fs_name: {self.fs_name}, enable: {self.enable}'
 
+    def stop(self):
+        self.scheduler.stop()
+        self.analyzer.stop()
+        self.mover.close()
+        self.policy_mgr.stop()
+
     def status(self, output_format="dict"):
         dict_data = {
                         'fs_name': self.fs_name,
@@ -104,11 +110,29 @@ class FSMDSPartition:
             if not context:
                 return HandleCommandResult(stdout=f'mds_partitioner already disabled for {fs_name}')
 
-            context.analyzer.stop()
-            context.mover.stop()
-            context.policy_mgr.stop()
+            context.stop()
             del self.context_map[fs_name]
             return HandleCommandResult(stdout=f'mds_partitioner disabled for {fs_name}')
+
+    def shutdown(self):
+        with self.lock:
+            for context in self.context_map.values():
+                context.stop()
+            self.context_map.clear()
+
+    def _start_worker(self, policy_mgr, policy_name, owner, worker, *args):
+        previous_owner = policy_mgr.get_owner(policy_name)
+        policy_mgr.set_owner(policy_name, owner)
+        started = False
+        try:
+            started, msg = worker.start(policy_name, *args)
+            return started, msg
+        finally:
+            if not started:
+                if previous_owner:
+                    policy_mgr.set_owner(policy_name, previous_owner)
+                else:
+                    policy_mgr.release_owner(policy_name)
 
     def partitioner_status(self, fs_name: str, output_format: str):
         log.debug('partitioner_status')
@@ -376,12 +400,12 @@ class FSMDSPartition:
             try:
                 duration = int(duration_)
             except ValueError:
-                return HandleCommandResult(retval=-errno.EINVAL, stderr=f'Invalid duration value {duration}')
+                return HandleCommandResult(retval=-errno.EINVAL, stderr=f'Invalid duration value {duration_}')
 
             try:
                 interval = int(interval_)
             except ValueError:
-                return HandleCommandResult(retval=-errno.EINVAL, stderr=f'Invalid interval value {interval}')
+                return HandleCommandResult(retval=-errno.EINVAL, stderr=f'Invalid interval value {interval_}')
 
             res = self.check_part_context(fs_name)
             if res[0] != 0:
@@ -400,10 +424,8 @@ class FSMDSPartition:
             if len(subtree_list) == 0:
                 return HandleCommandResult(retval=-errno.EINVAL, stderr=f'Subtree path must be added before starting analyzer')
 
-            policy_mgr.set_owner(policy_name, 'analyzer')
-
             analyzer = self.context_map[fs_name].analyzer
-            res, msg = analyzer.start(policy_name, duration, interval)
+            res, msg = self._start_worker(policy_mgr, policy_name, 'analyzer', analyzer, duration, interval)
             if res == True:
                 return HandleCommandResult(retval=0, stdout=msg)
             else:
@@ -423,7 +445,7 @@ class FSMDSPartition:
 
             analyzer = self.context_map[fs_name].analyzer
             analyzer_status = analyzer.status()
-            if analyzer_status['state'] == AnalyzerState.STOPPED:
+            if analyzer_status['state'] == AnalyzerState.STOPPED.name:
                 return HandleCommandResult(stdout='analyzer has already been stopped')
 
             policy_name = analyzer_status['policy_name']
@@ -459,10 +481,8 @@ class FSMDSPartition:
             if cur_owner in ['analyzer', 'scheduler']:
                 return HandleCommandResult(retval=-errno.EINVAL, stderr=f'policy owner is {cur_owner}')
 
-            policy_mgr.set_owner(policy_name, 'mover')
-
             mover = self.context_map[fs_name].mover
-            res, msg = mover.start(policy_name)
+            res, msg = self._start_worker(policy_mgr, policy_name, 'mover', mover)
             if res:
                 return HandleCommandResult(retval=0, stdout=msg)
 
@@ -516,10 +536,9 @@ class FSMDSPartition:
             if cur_owner in ['mover', 'analyzer']:
                 return HandleCommandResult(retval=-errno.EINVAL, stderr=f'policy owner is {cur_owner}')
 
-            policy_mgr.set_owner(policy_name, 'scheduler')
-
             scheduler = self.context_map[fs_name].scheduler
-            res, msg = scheduler.start(policy_name, analyzer_period, scheduler_period)
+            res, msg = self._start_worker(policy_mgr, policy_name, 'scheduler', scheduler,
+                                          analyzer_period, scheduler_period)
 
         if res:
             return HandleCommandResult(retval=0, stdout=msg)

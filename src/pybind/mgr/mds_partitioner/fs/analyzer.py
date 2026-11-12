@@ -27,8 +27,6 @@ class AnalyzerState(Enum):
     RUNNING  = 2
 
 
-METRIC_COLLECT_INTERVAL = 1
-
 class AnalyzerTimerCtx:
 
     def __init__(self, duration, interval, task_func):
@@ -37,7 +35,7 @@ class AnalyzerTimerCtx:
         self.interval = interval
         self.fs_metric_types = [MetricType.metadata_latency, MetricType.stddev_metadata_latency]
         self.fs_metrics: dict = { metric_type.name: { 'first': None, 'last': None } for metric_type in self.fs_metric_types }
-        self.timer_task = RTimer(METRIC_COLLECT_INTERVAL, task_func)
+        self.timer_task = RTimer(interval, task_func)
         self.state = JobState.STOPPED
         self.subtree_set: set = set()
         self.terminated = threading.Event()
@@ -58,7 +56,7 @@ class Analyzer:
         self.policy_name = None
         self.stopping = threading.Event()
         self.lock = threading.Lock()
-        self.timer_ctx:AnalyzerTimerCtx
+        self.timer_ctx = None
 
     def _check_finish(self):
         if self.timer_ctx.finish_datetime and datetime.datetime.now() > self.timer_ctx.finish_datetime:
@@ -149,6 +147,9 @@ class Analyzer:
         return results
 
     def _get_state_all(self):
+        if self.timer_ctx is None:
+            return {'fs_name': self.fs_name, 'policy_name': self.policy_name,
+                    'state': self.state.name}
         return {
                    'fs_name': self.fs_name,
                    'policy_name': self.policy_name,
@@ -164,6 +165,8 @@ class Analyzer:
 
     def start(self, policy_name, duration, interval):
         with self.lock:
+            if duration <= 0 or interval <= 0:
+                return False, 'duration and interval must be greater than 0'
             if self.state == AnalyzerState.RUNNING or \
                 self.state == AnalyzerState.STARTED:
                 log.debug(f"Analzyer already started {self.fs_name}")
@@ -171,11 +174,11 @@ class Analyzer:
 
             self.policy_name = policy_name
             timer_ctx = AnalyzerTimerCtx(duration, interval, self.timer_handler)
-            timer_ctx.timer_task.start()
             timer_ctx.state = JobState.STARTED
             self.stopping.clear()
             self.timer_ctx = timer_ctx
             self.state = AnalyzerState.STARTED
+            timer_ctx.timer_task.start()
 
             return True, f'analyze start {self.fs_name}'
 
@@ -185,14 +188,14 @@ class Analyzer:
                 log.debug(f"Analzyer is not enabled.")
                 return
 
-            if self.timer_ctx.state == JobState.RUNNING:
-                self.stopping.set()
-                self.timer_ctx.timer_task.cancel()
-                self.timer_ctx.state = JobState.DONE
-                self.policy_name = None
-
-            if self.state == AnalyzerState.RUNNING:
-                self.state = AnalyzerState.STOPPED
+            self.stopping.set()
+            timer = self.timer_ctx.timer_task
+            timer.cancel()
+            self.timer_ctx.state = JobState.DONE
+            self.policy_name = None
+            self.state = AnalyzerState.STOPPED
+        # A timer callback can be waiting for self.lock when cancel() runs.
+        timer.join()
 
     def status(self, output_format='dict'):
         with self.lock:

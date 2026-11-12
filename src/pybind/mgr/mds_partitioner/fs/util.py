@@ -60,33 +60,31 @@ class WorkQueue(threading.Thread):
     def run(self):
         log.debug('workqueue run')
         try:
-            with self.lock:
-                while True:
+            while True:
+                with self.lock:
                     self.cond.wait_for(lambda: not self.queue.empty() or \
                                                    self.stopping.is_set())
 
                     if self.stopping.is_set():
-                        self.terminated.set()
-                        self.cond.notifyAll()
                         return
 
                     context = self.queue.get()
-                    self.lock.release()
-                    try:
-                        context.run()
-                    except Exception as e:
-                        log.warn(f'callback exception: {e}')
-                    self.lock.acquire()
-        except Exception as e:
-            log.info(f'threading exception: {e}')
+                try:
+                    context.run()
+                except Exception:
+                    log.exception('workqueue callback failed')
+        finally:
+            self.terminated.set()
 
     def enqueue(self, context):
         with self.lock:
+            if self.stopping.is_set():
+                raise RuntimeError('workqueue has stopped')
             self.queue.put(context)
-            self.cond.notifyAll()
+            self.cond.notify_all()
 
     def stop(self):
         with self.lock:
             self.stopping.set()
-            self.cond.notifyAll()
-            self.cond.wait_for(lambda: self.terminated.is_set())
+            self.cond.notify_all()
+        self.join()

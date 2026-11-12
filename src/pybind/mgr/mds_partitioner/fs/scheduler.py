@@ -1,6 +1,5 @@
-from .exception import MDSPartException
-from .analyzer import Analyzer, AnalyzerState
-from .mover import Mover
+from .analyzer import JobState
+from .mover import MoverCtxState
 from enum import Enum, unique
 import logging
 import threading
@@ -24,9 +23,12 @@ class Scheduler:
         self.mover = mover
         self.policy_mgr = policy_mgr
         self.thread = None
-        self.stop_event: threading.Event
+        self.stop_event = threading.Event()
         self.lock = threading.Lock()
         self.state = SchedulerState.INITIALIZED
+        self.scheduler_period = 0
+        self.analyzer_period = 0
+        self.policy_name = ''
 
     def start(self, policy_name, analyzer_period, scheduler_period):
         log.debug('Scheduler start')
@@ -49,28 +51,21 @@ class Scheduler:
             self.policy_name = policy_name
             self.stop_event = threading.Event()
             self.thread = threading.Thread(target=self.run)
-            self.thread.start()
             self.state = SchedulerState.INVOKED
+            self.thread.start()
             return True, f"Scheduler for {policy_name} has been invoked."
 
     def stop(self):
         log.debug('Scheduler stop')
         with self.lock:
-            if self.state in [SchedulerState.INITIALIZED, SchedulerState.STOP]:
-                return False, f'Scheduler is in {self.state.name}'
             self.stop_event.set()
+            thread = self.thread
+        if thread is not None:
+            thread.join()
 
     def wait_next(self):
-        start_time = time.time()
-
-        while True:
-            elapsed_time = time.time() - start_time
-            if elapsed_time >= self.scheduler_period:
-                return True
-            time.sleep(1)
-
-            if self.stop_event.is_set():
-                return True
+        self.stop_event.wait(self.scheduler_period)
+        return True
 
     def status(self, output_format='json'):
         with self.lock:
@@ -85,31 +80,27 @@ class Scheduler:
             return json.dumps(dict_data, indent=4)
 
     def run_analyzer(self):
-        res, msg = self.analyzer.start(self.policy_name, 1000, 1)
+        res, msg = self.analyzer.start(self.policy_name, self.analyzer_period, 1)
         if res != True:
             log.debug(f'Scheduler anayzler error in scheduler: {msg}')
             return res
 
         log.debug("analyzer running")
-        start_time = time.time()
-        while True:
-            res, data = self.policy_mgr.show(self.policy_name, output_format='dict')
-            assert res == True
-            elapsed_time = time.time() - start_time
-
-            if data['workload_table_ready'] == 'True' and \
-                elapsed_time >= self.analyzer_period:
-                log.debug("ready analyzer data")
-                break
-            time.sleep(5)
-
-            if self.stop_event.is_set():
-                break
-
-        log.debug("analyzer check status done")
-        self.analyzer.stop()
-        log.debug("analyzer stop")
-        return True
+        start_time = time.monotonic()
+        try:
+            while not self.stop_event.is_set():
+                res, data = self.policy_mgr.show(self.policy_name, output_format='dict')
+                if not res:
+                    return False
+                elapsed_time = time.monotonic() - start_time
+                if data['workload_table_ready'] == 'True' and elapsed_time >= self.analyzer_period:
+                    return True
+                if self.analyzer.status()['timer_state'] == JobState.DONE.name:
+                    return data['workload_table_ready'] == 'True'
+                self.stop_event.wait(1)
+            return False
+        finally:
+            self.analyzer.stop()
 
     def run_mover(self):
         res, msg = self.mover.start(self.policy_name)
@@ -119,20 +110,17 @@ class Scheduler:
 
         log.debug("mover start")
 
-        while True:
-            status = self.mover.status('dict')
-            log.debug("mover status ")
-            if status['total_jobs'] > 0 and  \
-                status['total_jobs'] == status['processed_jobs']:
-                break
-
-            time.sleep(5)
-            if self.stop_event.is_set():
-                break
-
-        self.mover.stop()
-        log.debug("mover stop")
-        return True
+        try:
+            while not self.stop_event.is_set():
+                status = self.mover.status('dict')
+                if status['status'] == MoverCtxState.FAILED.name:
+                    return False
+                if status['status'] == MoverCtxState.DONE.name:
+                    return status['total_jobs'] == status['processed_jobs']
+                self.stop_event.wait(1)
+            return False
+        finally:
+            self.mover.stop()
 
     def run(self):
         log.debug('Scheduler run')
@@ -140,32 +128,35 @@ class Scheduler:
         with self.lock:
             self.state = SchedulerState.RUNNING_ANALYZER
 
-        while not self.stop_event.is_set():
-            with self.lock:
-                state = self.state
+        try:
+            while not self.stop_event.is_set():
+                with self.lock:
+                    state = self.state
 
-            log.debug(f"Scheduler worker thread is running in {state}.")
+                log.debug(f"Scheduler worker thread is running in {state}.")
 
-            if state == SchedulerState.RUNNING_ANALYZER:
-                res = self.run_analyzer()
-            elif state == SchedulerState.RUNNING_MOVER:
-                res = self.run_mover()
-            else:
-                res = self.wait_next()
-
-            if res == False:
-                state = SchedulerState.WAIT
-                continue
-
-            # state transition to next
-            with self.lock:
                 if state == SchedulerState.RUNNING_ANALYZER:
-                    self.state = SchedulerState.RUNNING_MOVER
+                    res = self.run_analyzer()
                 elif state == SchedulerState.RUNNING_MOVER:
-                    self.state = SchedulerState.WAIT
+                    res = self.run_mover()
                 else:
-                    self.state = SchedulerState.RUNNING_ANALYZER
+                    res = self.wait_next()
 
-        with self.lock:
-            self.state = SchedulerState.STOP
-            self.policy_name = ''
+                with self.lock:
+                    if not res:
+                        self.state = SchedulerState.WAIT
+                    elif state == SchedulerState.RUNNING_ANALYZER:
+                        self.state = SchedulerState.RUNNING_MOVER
+                    elif state == SchedulerState.RUNNING_MOVER:
+                        self.state = SchedulerState.WAIT
+                    else:
+                        self.state = SchedulerState.RUNNING_ANALYZER
+        finally:
+            try:
+                self.analyzer.stop()
+            finally:
+                try:
+                    self.mover.stop()
+                finally:
+                    with self.lock:
+                        self.state = SchedulerState.STOP

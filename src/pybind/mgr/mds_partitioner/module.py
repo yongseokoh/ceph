@@ -222,6 +222,7 @@ class Module(MgrModule):
         self.log.info('Stopping')
         self.run = False
         self.event.set()
+        self.mds_partition.shutdown()
 
     def notify(self, notify_type: NotifyType, notify_id):
         self.mds_partition.notify(notify_type)
